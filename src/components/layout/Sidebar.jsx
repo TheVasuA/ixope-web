@@ -15,9 +15,7 @@ const navItems = [
   { path: '/scope/micro', label: SCOPE_LABELS.micro, icon: Microscope, scope: 'micro' },
   { type: 'divider', label: 'Tools' },
   { path: '/live', label: 'Live Feed', icon: Video },
-  { path: '/uploads', label: 'Uploads', icon: Upload },
   { path: '/reports', label: 'Reports', icon: FileText },
-  { path: '/device', label: 'Device', icon: Activity },
 ]
 
 export default function Sidebar() {

@@ -8,7 +8,7 @@ import { Toaster } from 'react-hot-toast'
 
 // ─── MAINTENANCE MODE ────────────────────────────────────────────────────────
 // Set to true to redirect all users to maintenance page
-const MAINTENANCE_MODE = true
+const MAINTENANCE_MODE = false
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Lazy-loaded pages
