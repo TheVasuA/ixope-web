@@ -106,7 +106,7 @@ export default function GoogleSignInModal() {
         </form>
 
         <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 text-center">
-          <p className="text-xs text-gray-400">IXOPE Medical Technology</p>
+          <p className="text-xs text-gray-400">IXOPE @2026</p>
         </div>
       </div>
     </div>

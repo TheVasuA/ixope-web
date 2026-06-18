@@ -21,8 +21,8 @@ export default function ScopeGallery() {
   const { data: imgData, isLoading: imgLoading } = useGetScopeImagesQuery(scope)
   const { data: vidData, isLoading: vidLoading } = useGetScopeVideosQuery(scope)
 
-  const images = imgData?.images || []
-  const videos = vidData?.videos || []
+  const images = Array.isArray(imgData) ? imgData : (imgData?.images || [])
+  const videos = Array.isArray(vidData) ? vidData : (vidData?.videos || [])
   const lightbox = useLightbox(images)
 
   const Icon = scopeIcons[scope]

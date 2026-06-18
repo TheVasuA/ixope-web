@@ -8,7 +8,7 @@ import { Toaster } from 'react-hot-toast'
 
 // ─── MAINTENANCE MODE ────────────────────────────────────────────────────────
 // Set to true to redirect all users to maintenance page
-const MAINTENANCE_MODE = false
+const MAINTENANCE_MODE = true
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Lazy-loaded pages
@@ -51,6 +51,9 @@ export default function App() {
     window.location.href = '/maintenance.html'
     return null
   }
+
+  // Show login modal if not authenticated (on all routes including /dashboard)
+  // Login appears on top of maintenance-accessible pages
 
   return (
     <>

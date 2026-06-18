@@ -25,10 +25,12 @@ export default function ImageGrid({ images = [], onImageClick, selectable = fals
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
       {images.map((img, idx) => {
-        // Use thumbnail URL for grid (fast loading), full URL for lightbox
-        const thumbSrc = img.thumbnail_url
-          ? `${SERVER_URL}${img.thumbnail_url}`
-          : `${SERVER_URL}${img.url}`
+        // Use the file URL directly
+        const imgSrc = img.url
+          ? `${SERVER_URL}${img.url}`
+          : img.thumbnail_url
+            ? `${SERVER_URL}${img.thumbnail_url}`
+            : ''
 
         return (
           <div
@@ -61,7 +63,7 @@ export default function ImageGrid({ images = [], onImageClick, selectable = fals
               </div>
             ) : (
               <img
-                src={thumbSrc}
+                src={imgSrc}
                 alt={img.original_filename || img.filename}
                 loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

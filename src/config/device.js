@@ -2,7 +2,9 @@
 export const DEVICE_ID = '1001'
 
 // ─── FastAPI Server (main backend) ───────────────────────────────────────────
-export const SERVER_URL = 'https://api.ixope-hub.com'
+// For production: 'https://api.ixope-hub.com'
+// For local dev: '' (empty — uses Vite proxy)
+export const SERVER_URL = import.meta.env.PROD ? 'https://api.ixope-hub.com' : ''
 export const API_BASE_URL = SERVER_URL
 
 // Standard upload endpoints

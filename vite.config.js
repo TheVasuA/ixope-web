@@ -12,11 +12,19 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
+      '/captures': {
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
-      '/files': {
+      '/auth': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/devices': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/patients': {
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
@@ -24,7 +32,10 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
-      // Device-local endpoints (Flask on device)
+      '/files': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
       '/live_feed': {
         target: 'http://localhost:5000',
         changeOrigin: true,
