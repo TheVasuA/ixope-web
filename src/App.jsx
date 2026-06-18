@@ -1,10 +1,15 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import AppLayout from './components/layout/AppLayout'
 import AdminLayout from './components/admin/AdminLayout'
 import GoogleSignInModal from './components/ui/GoogleSignInModal'
 import { Toaster } from 'react-hot-toast'
+
+// ─── MAINTENANCE MODE ────────────────────────────────────────────────────────
+// Set to true to redirect all users to maintenance page
+const MAINTENANCE_MODE = true
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Lazy-loaded pages
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -41,6 +46,12 @@ function NotFound() {
 export default function App() {
   const { isAuthenticated, user } = useSelector((state) => state.auth)
 
+  // Maintenance mode: only redirect the home page `/`, allow all other routes
+  if (MAINTENANCE_MODE && window.location.pathname === '/') {
+    window.location.href = '/maintenance.html'
+    return null
+  }
+
   return (
     <>
       <Toaster
@@ -66,6 +77,7 @@ export default function App() {
         {/* ─── Portal Routes (Doctor/Staff UI) ────────────────── */}
         <Route element={<AppLayout />}>
           <Route index element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
+          <Route path="/dashboard" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
           <Route path="/scope/:scope" element={<Suspense fallback={<PageLoader />}><ScopeGallery /></Suspense>} />
           <Route path="/live" element={<Suspense fallback={<PageLoader />}><LiveFeed /></Suspense>} />
           <Route path="/uploads" element={<Suspense fallback={<PageLoader />}><Uploads /></Suspense>} />
