@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-accent: #0a84ff;
+    --color-success: #30d158;
+    --color-danger: #ff453a;
+    --color-warning: #ff9f0a;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a5c transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #3a3a5c;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .medical-card {
+    @apply bg-white dark:bg-surface-card border border-gray-200 dark:border-surface-border rounded-xl p-5 transition-all duration-200;
+  }
+
+  .medical-card:hover {
+    @apply shadow-lg dark:shadow-medical-500/5 border-medical-200 dark:border-medical-800;
+  }
+
+  .btn-primary {
+    @apply bg-medical-500 hover:bg-medical-600 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+  }
+}
