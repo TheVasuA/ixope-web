@@ -14,8 +14,8 @@ export default function VideoPlayer({ video, onDeleted }) {
   const playerRef = useRef(null)
   const [deleteVideo, { isLoading }] = useDeleteVideoMutation()
 
-  const videoUrl = `${SERVER_URL}${video.url}`
-  const thumbUrl = video.thumbnail_url ? `${SERVER_URL}${video.thumbnail_url}` : null
+  const videoUrl = `${SERVER_URL}${(video.url || '').replace(/^\/api/, '')}`
+  const thumbUrl = null
 
   const handleDelete = async () => {
     try {

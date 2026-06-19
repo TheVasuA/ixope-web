@@ -25,12 +25,9 @@ export default function ImageGrid({ images = [], onImageClick, selectable = fals
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
       {images.map((img, idx) => {
-        // Use the file URL directly
-        const imgSrc = img.url
-          ? `${SERVER_URL}${img.url}`
-          : img.thumbnail_url
-            ? `${SERVER_URL}${img.thumbnail_url}`
-            : ''
+        // Direct image file URL - strip /api prefix if present
+        const rawUrl = (img.url || '').replace(/^\/api/, '')
+        const imgSrc = `${SERVER_URL}${rawUrl}`
 
         return (
           <div

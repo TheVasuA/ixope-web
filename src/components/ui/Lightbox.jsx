@@ -11,7 +11,7 @@ export default function Lightbox({ items, currentIndex, onClose, onNext, onPrev 
   const current = items[currentIndex]
 
   // Use full-resolution URL (not thumbnail)
-  const fullUrl = `${SERVER_URL}${current.url}`
+  const fullUrl = `${SERVER_URL}${(current.url || '').replace(/^\/api/, '')}`
 
   const handleZoomIn = (e) => { e.stopPropagation(); setZoom((z) => Math.min(z + 0.5, 4)) }
   const handleZoomOut = (e) => { e.stopPropagation(); setZoom((z) => Math.max(z - 0.5, 0.5)) }

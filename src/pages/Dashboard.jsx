@@ -74,7 +74,7 @@ export default function Dashboard() {
               {latestImages.map((img) => (
                 <img
                   key={img.filename}
-                  src={`${SERVER_URL}${img.path}`}
+                  src={`${SERVER_URL}${(img.url || '').replace(/^\/api/, '')}`}
                   alt={img.filename}
                   className="aspect-square object-cover rounded-lg ring-1 ring-gray-200 dark:ring-gray-700"
                   loading="lazy"
