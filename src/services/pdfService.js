@@ -3,95 +3,114 @@ import { DEVICE_ID, SERVER_URL } from '../config/device'
 import { formatDate } from '../utils/formatters'
 
 /**
- * Load image as base64 by creating a hidden img and drawing to canvas.
- * Uses a proxy-friendly approach: adds timestamp to bust cache,
- * and tries multiple methods to handle CORS.
+ * Preload all images using hidden <img> elements (no CORS needed for img tags),
+ * then draw each to a canvas to get base64 data.
+ * Returns array of {dataUrl, width, height} or null for failed images.
  */
-async function fetchImageAsBase64(url) {
-  // Normalize URL — ensure /captures prefix is present
-  let path = (url || '').replace(/^\/api/, '')
-  if (!path.startsWith('/captures')) {
-    path = `/captures${path}`
-  }
-  const fullUrl = `${SERVER_URL}${path}`
+async function preloadImages(images) {
+  const results = []
 
-  // Method: Load image into a hidden img tag, draw to canvas, extract base64
-  // This works because we load it fresh with crossOrigin set
+  for (const img of images) {
+    let path = (img.url || '').replace(/^\/api/, '')
+    if (!path.startsWith('/captures')) {
+      path = `/captures${path}`
+    }
+    const src = `${SERVER_URL}${path}`
+
+    try {
+      const result = await loadSingleImage(src)
+      results.push(result)
+    } catch (e) {
+      console.warn(`Failed to load image for PDF: ${img.filename}`, e)
+      results.push(null)
+    }
+  }
+
+  return results
+}
+
+function loadSingleImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
 
+    const timeout = setTimeout(() => {
+      reject(new Error('Image load timeout'))
+    }, 15000)
+
     img.onload = () => {
+      clearTimeout(timeout)
       try {
         const canvas = document.createElement('canvas')
         canvas.width = img.naturalWidth
         canvas.height = img.naturalHeight
         const ctx = canvas.getContext('2d')
         ctx.drawImage(img, 0, 0)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
-        resolve(dataUrl)
-      } catch (canvasErr) {
-        // Canvas tainted — try fetch as fallback
-        fetchViaXHR(fullUrl).then(resolve).catch(reject)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+        resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
+      } catch (e) {
+        // Canvas tainted — CORS not set on server
+        // Fallback: try without crossOrigin (won't get data but let's try a proxy)
+        reject(e)
       }
     }
 
     img.onerror = () => {
-      // Image element failed — try fetch
-      fetchViaXHR(fullUrl).then(resolve).catch(reject)
-    }
+      clearTimeout(timeout)
+      // Try again without crossOrigin attribute — some servers reject anonymous requests
+      const img2 = new Image()
+      const timeout2 = setTimeout(() => reject(new Error('Fallback timeout')), 15000)
 
-    img.src = fullUrl
-  })
-}
-
-/**
- * Fetch image via XMLHttpRequest with responseType blob
- * (sometimes works when fetch doesn't due to CORS handling differences)
- */
-function fetchViaXHR(url) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', url, true)
-    xhr.responseType = 'blob'
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(xhr.response)
-      } else {
-        reject(new Error(`XHR failed: ${xhr.status}`))
+      img2.onload = () => {
+        clearTimeout(timeout2)
+        // Can't use canvas without crossOrigin, so try to fetch via a different method
+        fetchAsBlob(src).then(blob => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const tempImg = new Image()
+            tempImg.onload = () => {
+              resolve({ dataUrl: reader.result, width: tempImg.naturalWidth, height: tempImg.naturalHeight })
+            }
+            tempImg.onerror = () => resolve({ dataUrl: reader.result, width: 640, height: 480 })
+            tempImg.src = reader.result
+          }
+          reader.onerror = () => reject(new Error('FileReader failed'))
+          reader.readAsDataURL(blob)
+        }).catch(reject)
       }
+
+      img2.onerror = () => {
+        clearTimeout(timeout2)
+        reject(new Error('Image load failed'))
+      }
+
+      img2.src = src
     }
 
-    xhr.onerror = () => reject(new Error('XHR network error'))
-    xhr.send()
+    img.src = src
   })
 }
 
-/**
- * Get image dimensions from base64 data URL
- */
-function getImageDimensions(dataUrl) {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => resolve({ width: img.width, height: img.height })
-    img.onerror = () => resolve({ width: 4, height: 3 })
-    img.src = dataUrl
-  })
+async function fetchAsBlob(url) {
+  // Try fetch with no-cors mode — gets opaque response but we can't read it
+  // So try normal fetch first
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return await resp.blob()
 }
 
 /**
  * Generate medical PDF report — one image per page, full size
  */
 export async function generateMedicalReport(selectedImages, patientInfo) {
+  // Preload all images first (shows progress)
+  const loadedImages = await preloadImages(selectedImages)
+
   const doc = new jsPDF('p', 'mm', 'a4')
-  const pageWidth = doc.internal.pageSize.getWidth()   // 210
-  const pageHeight = doc.internal.pageSize.getHeight() // 297
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const MARGIN = 15
-  const contentWidth = pageWidth - MARGIN * 2  // 180
+  const contentWidth = pageWidth - MARGIN * 2
 
   // ─── Cover / Header page ─────────────────────────────────────────────
   doc.setFontSize(20)
@@ -105,7 +124,6 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
   doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, MARGIN, 40)
   doc.text(`Total images: ${selectedImages.length}`, MARGIN, 46)
 
-  // Patient info section
   doc.setDrawColor(200)
   doc.line(MARGIN, 52, pageWidth - MARGIN, 52)
 
@@ -129,15 +147,15 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     doc.setFont('helvetica', 'normal')
     const lines = doc.splitTextToSize(patientInfo.notes, contentWidth)
     doc.text(lines, MARGIN, y)
-    y += lines.length * 5
   }
 
   // ─── One image per page ──────────────────────────────────────────────
   for (let i = 0; i < selectedImages.length; i++) {
     doc.addPage()
     const img = selectedImages[i]
+    const loaded = loadedImages[i]
 
-    // Image title bar
+    // Title
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(0)
@@ -152,15 +170,12 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     doc.setDrawColor(220)
     doc.line(MARGIN, 25, pageWidth - MARGIN, 25)
 
-    // Image area
     const imgAreaTop = 30
     const imgAreaHeight = pageHeight - 25 - imgAreaTop
     const imgAreaWidth = contentWidth
 
-    try {
-      const imageData = await fetchImageAsBase64(img.url || '')
-      const dims = await getImageDimensions(imageData)
-      const aspectRatio = dims.width / dims.height
+    if (loaded && loaded.dataUrl) {
+      const aspectRatio = loaded.width / loaded.height
 
       let drawWidth, drawHeight
       if (aspectRatio > imgAreaWidth / imgAreaHeight) {
@@ -174,9 +189,8 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
       const drawX = MARGIN + (imgAreaWidth - drawWidth) / 2
       const drawY = imgAreaTop + (imgAreaHeight - drawHeight) / 2
 
-      doc.addImage(imageData, 'JPEG', drawX, drawY, drawWidth, drawHeight)
-    } catch (err) {
-      console.error(`PDF image failed: ${img.filename}`, err)
+      doc.addImage(loaded.dataUrl, 'JPEG', drawX, drawY, drawWidth, drawHeight)
+    } else {
       doc.setFontSize(12)
       doc.setTextColor(180)
       doc.text('Image could not be loaded', pageWidth / 2, imgAreaTop + imgAreaHeight / 2, { align: 'center' })
@@ -186,7 +200,7 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     }
   }
 
-  // ─── Page numbers footer ─────────────────────────────────────────────
+  // ─── Page numbers ────────────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
