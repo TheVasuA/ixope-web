@@ -1,111 +1,60 @@
 import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
 import { DEVICE_ID, SERVER_URL } from '../config/device'
 import { formatDate } from '../utils/formatters'
 
 /**
- * Preload all images using hidden <img> elements (no CORS needed for img tags),
- * then draw each to a canvas to get base64 data.
- * Returns array of {dataUrl, width, height} or null for failed images.
+ * Load image as base64 using html2canvas as fallback.
+ * html2canvas renders a DOM element to canvas — since <img> tags load
+ * cross-origin images without CORS restrictions, we can capture them.
  */
-async function preloadImages(images) {
-  const results = []
-
-  for (const img of images) {
-    let path = (img.url || '').replace(/^\/api/, '')
-    if (!path.startsWith('/captures')) {
-      path = `/captures${path}`
-    }
-    const src = `${SERVER_URL}${path}`
-
-    try {
-      const result = await loadSingleImage(src)
-      results.push(result)
-    } catch (e) {
-      console.warn(`Failed to load image for PDF: ${img.filename}`, e)
-      results.push(null)
-    }
+async function getImageDataUrl(imgUrl) {
+  let path = (imgUrl || '').replace(/^\/api/, '')
+  if (!path.startsWith('/captures')) {
+    path = `/captures${path}`
   }
+  const src = `${SERVER_URL}${path}`
 
-  return results
-}
+  // Create a temporary hidden container
+  const container = document.createElement('div')
+  container.style.cssText = 'position:fixed;left:-9999px;top:-9999px;'
+  document.body.appendChild(container)
 
-function loadSingleImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-
-    const timeout = setTimeout(() => {
-      reject(new Error('Image load timeout'))
-    }, 15000)
-
-    img.onload = () => {
-      clearTimeout(timeout)
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.naturalWidth
-        canvas.height = img.naturalHeight
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
-        resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
-      } catch (e) {
-        // Canvas tainted — CORS not set on server
-        // Fallback: try without crossOrigin (won't get data but let's try a proxy)
-        reject(e)
-      }
-    }
-
-    img.onerror = () => {
-      clearTimeout(timeout)
-      // Try again without crossOrigin attribute — some servers reject anonymous requests
-      const img2 = new Image()
-      const timeout2 = setTimeout(() => reject(new Error('Fallback timeout')), 15000)
-
-      img2.onload = () => {
-        clearTimeout(timeout2)
-        // Can't use canvas without crossOrigin, so try to fetch via a different method
-        fetchAsBlob(src).then(blob => {
-          const reader = new FileReader()
-          reader.onload = () => {
-            const tempImg = new Image()
-            tempImg.onload = () => {
-              resolve({ dataUrl: reader.result, width: tempImg.naturalWidth, height: tempImg.naturalHeight })
-            }
-            tempImg.onerror = () => resolve({ dataUrl: reader.result, width: 640, height: 480 })
-            tempImg.src = reader.result
-          }
-          reader.onerror = () => reject(new Error('FileReader failed'))
-          reader.readAsDataURL(blob)
-        }).catch(reject)
-      }
-
-      img2.onerror = () => {
-        clearTimeout(timeout2)
-        reject(new Error('Image load failed'))
-      }
-
-      img2.src = src
-    }
-
+  try {
+    // Load image in a real <img> tag (no CORS needed for display)
+    const img = document.createElement('img')
+    img.style.cssText = 'max-width:1200px;max-height:900px;display:block;'
     img.src = src
-  })
-}
 
-async function fetchAsBlob(url) {
-  // Try fetch with no-cors mode — gets opaque response but we can't read it
-  // So try normal fetch first
-  const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-  return await resp.blob()
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timeout')), 20000)
+      img.onload = () => { clearTimeout(timeout); resolve() }
+      img.onerror = () => { clearTimeout(timeout); reject(new Error('load failed')) }
+    })
+
+    container.appendChild(img)
+
+    // Use html2canvas to capture the rendered image
+    const canvas = await html2canvas(container, {
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      scale: 1,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    })
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    return { dataUrl, width: img.naturalWidth, height: img.naturalHeight }
+  } finally {
+    document.body.removeChild(container)
+  }
 }
 
 /**
  * Generate medical PDF report — one image per page, full size
  */
 export async function generateMedicalReport(selectedImages, patientInfo) {
-  // Preload all images first (shows progress)
-  const loadedImages = await preloadImages(selectedImages)
-
   const doc = new jsPDF('p', 'mm', 'a4')
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -153,7 +102,6 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
   for (let i = 0; i < selectedImages.length; i++) {
     doc.addPage()
     const img = selectedImages[i]
-    const loaded = loadedImages[i]
 
     // Title
     doc.setFontSize(10)
@@ -174,7 +122,8 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     const imgAreaHeight = pageHeight - 25 - imgAreaTop
     const imgAreaWidth = contentWidth
 
-    if (loaded && loaded.dataUrl) {
+    try {
+      const loaded = await getImageDataUrl(img.url || '')
       const aspectRatio = loaded.width / loaded.height
 
       let drawWidth, drawHeight
@@ -190,7 +139,8 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
       const drawY = imgAreaTop + (imgAreaHeight - drawHeight) / 2
 
       doc.addImage(loaded.dataUrl, 'JPEG', drawX, drawY, drawWidth, drawHeight)
-    } else {
+    } catch (err) {
+      console.error(`PDF image failed: ${img.filename}`, err)
       doc.setFontSize(12)
       doc.setTextColor(180)
       doc.text('Image could not be loaded', pageWidth / 2, imgAreaTop + imgAreaHeight / 2, { align: 'center' })
