@@ -1,23 +1,17 @@
 import { useDispatch, useSelector } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import { toggleSidebar } from '../../store/slices/uiSlice'
 import { logout } from '../../store/slices/authSlice'
-import { useGetHealthQuery } from '../../services/api'
-import { POLLING_INTERVAL } from '../../config/device'
-import { Menu, Sun, Moon, Wifi, WifiOff, LogOut, User } from 'lucide-react'
+import { Menu, Sun, Moon, LogOut, User, FileText } from 'lucide-react'
 import { useTheme } from '../../hooks/useTheme'
-import { formatRelativeTime } from '../../utils/formatters'
 import { useState } from 'react'
 
 export default function Header() {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const { theme, toggle } = useTheme()
   const user = useSelector((state) => state.auth.user)
   const [showMenu, setShowMenu] = useState(false)
-  const { data: health, isError } = useGetHealthQuery(undefined, {
-    pollingInterval: POLLING_INTERVAL,
-  })
-
-  const isOnline = health?.status === 'ok' && !isError
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-surface-card/80 backdrop-blur-md border-b border-gray-200 dark:border-surface-border flex items-center justify-between px-4 md:px-6">
@@ -33,15 +27,21 @@ export default function Header() {
 
       {/* Right: status + user + theme */}
       <div className="flex items-center gap-3">
-        {/* Device status */}
-        <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-          isOnline
-            ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-            : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-        }`}>
-          {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span>{isOnline ? 'Online' : 'Offline'}</span>
-        </div>
+        {/* Report button */}
+        <button
+          onClick={() => navigate('/reports')}
+          className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold
+            bg-gradient-to-b from-medical-400 to-medical-600 text-white
+            shadow-[0_4px_0_0_theme(colors.medical.700),0_6px_12px_-2px_rgba(0,0,0,0.25)]
+            hover:shadow-[0_2px_0_0_theme(colors.medical.700),0_4px_8px_-2px_rgba(0,0,0,0.25)]
+            hover:translate-y-[2px]
+            active:shadow-[0_0px_0_0_theme(colors.medical.700),0_2px_4px_-2px_rgba(0,0,0,0.25)]
+            active:translate-y-[4px]
+            transition-all duration-100"
+        >
+          <FileText size={14} />
+          <span>Reports</span>
+        </button>
 
         {/* Theme toggle */}
         <button

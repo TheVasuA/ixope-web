@@ -1,17 +1,22 @@
 import { useState } from 'react'
-import { X, ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, Trash2 } from 'lucide-react'
 import { SERVER_URL } from '../../config/device'
 import { formatDate } from '../../utils/formatters'
+import { useDeleteImageMutation } from '../../services/api'
 
 export default function Lightbox({ items, currentIndex, onClose, onNext, onPrev }) {
   const [zoom, setZoom] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteImage, { isLoading: isDeleting }] = useDeleteImageMutation()
 
   if (!items.length) return null
   const current = items[currentIndex]
 
-  // Use full-resolution URL (not thumbnail)
-  const fullUrl = `${SERVER_URL}${(current.url || '').replace(/^\/api/, '')}`
+  // Use full-resolution URL (not thumbnail) — ensure /captures prefix
+  let imgPath = (current.url || '').replace(/^\/api/, '')
+  if (!imgPath.startsWith('/captures')) imgPath = `/captures${imgPath}`
+  const fullUrl = `${SERVER_URL}${imgPath}`
 
   const handleZoomIn = (e) => { e.stopPropagation(); setZoom((z) => Math.min(z + 0.5, 4)) }
   const handleZoomOut = (e) => { e.stopPropagation(); setZoom((z) => Math.max(z - 0.5, 0.5)) }
@@ -21,6 +26,27 @@ export default function Lightbox({ items, currentIndex, onClose, onNext, onPrev 
     a.href = fullUrl
     a.download = current.original_filename || current.filename
     a.click()
+  }
+  const handleDelete = async (e) => {
+    e.stopPropagation()
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      setTimeout(() => setConfirmDelete(false), 3000)
+      return
+    }
+    try {
+      await deleteImage(current.id).unwrap()
+      // If last image, close lightbox; otherwise move to next/prev
+      if (items.length <= 1) {
+        onClose()
+      } else if (currentIndex >= items.length - 1) {
+        onPrev()
+      }
+      // RTK Query will invalidate and re-fetch the list
+    } catch (err) {
+      console.error('Delete failed:', err)
+    }
+    setConfirmDelete(false)
   }
 
   return (
@@ -41,6 +67,14 @@ export default function Lightbox({ items, currentIndex, onClose, onNext, onPrev 
           </button>
           <button onClick={handleDownload} className="p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors ml-2">
             <Download size={18} />
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className={`p-2 rounded-full transition-colors ml-1 ${confirmDelete ? 'bg-red-500 text-white' : 'hover:bg-white/10 text-white/70 hover:text-red-400'}`}
+            title={confirmDelete ? 'Click again to confirm delete' : 'Delete image'}
+          >
+            <Trash2 size={18} />
           </button>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors ml-2">
             <X size={20} />

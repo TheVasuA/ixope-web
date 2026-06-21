@@ -1,13 +1,51 @@
 import { jsPDF } from 'jspdf'
-import { DEVICE_ID, DEVICE_URL } from '../config/device'
+import { DEVICE_ID, SERVER_URL } from '../config/device'
 import { formatDate } from '../utils/formatters'
 
 /**
- * Fetch image and convert to base64 data URL
+ * Load image as base64 using canvas approach (works cross-origin if headers allow,
+ * falls back to same-origin fetch via relative URL)
  */
-async function fetchImageAsBase64(path) {
-  const response = await fetch(`${DEVICE_URL}${path}`)
-  const blob = await response.blob()
+async function fetchImageAsBase64(url) {
+  // Normalize URL — ensure /captures prefix is present
+  let path = (url || '').replace(/^\/api/, '')
+  if (!path.startsWith('/captures')) {
+    path = `/captures${path}`
+  }
+
+  // Try same-origin first (relative URL — goes through nginx/proxy)
+  // This avoids CORS entirely
+  const sameOriginUrl = path
+  // Full cross-origin URL as fallback
+  const crossOriginUrl = `${SERVER_URL}${path}`
+
+  // Attempt 1: fetch via same-origin (relative path)
+  try {
+    const response = await fetch(sameOriginUrl)
+    if (response.ok) {
+      const blob = await response.blob()
+      return await blobToDataUrl(blob)
+    }
+  } catch (e) {
+    // Same-origin failed, try cross-origin
+  }
+
+  // Attempt 2: fetch cross-origin
+  try {
+    const response = await fetch(crossOriginUrl, { mode: 'cors' })
+    if (response.ok) {
+      const blob = await response.blob()
+      return await blobToDataUrl(blob)
+    }
+  } catch (e) {
+    // Cross-origin fetch failed
+  }
+
+  // Attempt 3: load via Image element + canvas (bypasses some CORS issues)
+  return await loadImageViaCanvas(crossOriginUrl)
+}
+
+function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result)
@@ -16,101 +54,143 @@ async function fetchImageAsBase64(path) {
   })
 }
 
+function loadImageViaCanvas(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+        resolve(canvas.toDataURL('image/jpeg', 0.92))
+      } catch (e) {
+        reject(e)
+      }
+    }
+    img.onerror = () => reject(new Error('Image load failed'))
+    img.src = src
+  })
+}
+
 /**
- * Generate medical PDF report
+ * Generate medical PDF report — one image per page, full size
  */
 export async function generateMedicalReport(selectedImages, patientInfo) {
   const doc = new jsPDF('p', 'mm', 'a4')
-  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageWidth = doc.internal.pageSize.getWidth()   // 210
+  const pageHeight = doc.internal.pageSize.getHeight() // 297
   const MARGIN = 15
-  const IMG_WIDTH = 80
-  const IMG_HEIGHT = 60
-  const IMAGES_PER_PAGE = 4
+  const contentWidth = pageWidth - MARGIN * 2  // 180
 
-  // Header
-  doc.setFontSize(18)
+  // ─── Cover / Header page ─────────────────────────────────────────────
+  doc.setFontSize(20)
   doc.setFont('helvetica', 'bold')
-  doc.text('IXOPE Medical Report', MARGIN, 20)
+  doc.text('IXOPE Medical Report', MARGIN, 25)
 
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(100)
-  doc.text(`Device ID: ${DEVICE_ID}`, MARGIN, 28)
-  doc.text(`Generated: ${new Date().toLocaleDateString()}`, MARGIN, 33)
+  doc.text(`Device ID: ${DEVICE_ID}`, MARGIN, 34)
+  doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, MARGIN, 40)
+  doc.text(`Total images: ${selectedImages.length}`, MARGIN, 46)
 
-  // Patient info
+  // Patient info section
   doc.setDrawColor(200)
-  doc.line(MARGIN, 38, pageWidth - MARGIN, 38)
+  doc.line(MARGIN, 52, pageWidth - MARGIN, 52)
 
-  doc.setFontSize(11)
+  doc.setFontSize(12)
   doc.setTextColor(0)
   doc.setFont('helvetica', 'bold')
-  doc.text('Patient Information', MARGIN, 46)
+  doc.text('Patient Information', MARGIN, 62)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
 
-  let y = 53
-  doc.text(`Name: ${patientInfo.name}`, MARGIN, y)
-  y += 6
-  doc.text(`ID: ${patientInfo.id}`, MARGIN, y)
+  let y = 70
+  doc.text(`Name: ${patientInfo.name}`, MARGIN, y); y += 7
+  doc.text(`ID: ${patientInfo.id}`, MARGIN, y); y += 7
   if (patientInfo.dateOfBirth) {
-    y += 6
-    doc.text(`DOB: ${patientInfo.dateOfBirth}`, MARGIN, y)
+    doc.text(`Date of Birth: ${patientInfo.dateOfBirth}`, MARGIN, y); y += 7
   }
   if (patientInfo.notes) {
-    y += 6
-    doc.text(`Notes: ${patientInfo.notes}`, MARGIN, y)
+    y += 3
+    doc.setFont('helvetica', 'bold')
+    doc.text('Notes:', MARGIN, y); y += 6
+    doc.setFont('helvetica', 'normal')
+    const lines = doc.splitTextToSize(patientInfo.notes, contentWidth)
+    doc.text(lines, MARGIN, y)
+    y += lines.length * 5
   }
 
-  y += 10
-  doc.line(MARGIN, y, pageWidth - MARGIN, y)
-  y += 8
-
-  // Images
-  const skippedImages = []
-
+  // ─── One image per page ──────────────────────────────────────────────
   for (let i = 0; i < selectedImages.length; i++) {
-    if (i > 0 && i % IMAGES_PER_PAGE === 0) {
-      doc.addPage()
-      y = 20
-    }
-
+    doc.addPage()
     const img = selectedImages[i]
-    const position = i % IMAGES_PER_PAGE
-    const row = Math.floor(position / 2)
-    const col = position % 2
 
-    const x = MARGIN + col * (IMG_WIDTH + 10)
-    const imgY = y + row * (IMG_HEIGHT + 20)
+    // Image title bar
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(0)
+    doc.text(`Image ${i + 1} of ${selectedImages.length}`, MARGIN, 15)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(80)
+    const caption = `${(img.scope || '').toUpperCase()} · ${img.original_filename || img.filename} · ${formatDate(img.captured_at || img.created)}`
+    doc.text(caption, MARGIN, 22)
+
+    doc.setDrawColor(220)
+    doc.line(MARGIN, 25, pageWidth - MARGIN, 25)
+
+    // Image area: from y=30 to y=pageHeight-25
+    const imgAreaTop = 30
+    const imgAreaHeight = pageHeight - 25 - imgAreaTop
+    const imgAreaWidth = contentWidth
 
     try {
-      const imageData = await fetchImageAsBase64(img.path)
-      doc.addImage(imageData, 'JPEG', x, imgY, IMG_WIDTH, IMG_HEIGHT)
+      const imageData = await fetchImageAsBase64(img.url || '')
+
+      // Get dimensions for aspect ratio
+      const tempImg = await getImageDimensions(imageData)
+      const aspectRatio = tempImg.width / tempImg.height
+
+      let drawWidth, drawHeight
+      if (aspectRatio > imgAreaWidth / imgAreaHeight) {
+        drawWidth = imgAreaWidth
+        drawHeight = imgAreaWidth / aspectRatio
+      } else {
+        drawHeight = imgAreaHeight
+        drawWidth = imgAreaHeight * aspectRatio
+      }
+
+      // Center the image
+      const drawX = MARGIN + (imgAreaWidth - drawWidth) / 2
+      const drawY = imgAreaTop + (imgAreaHeight - drawHeight) / 2
+
+      doc.addImage(imageData, 'JPEG', drawX, drawY, drawWidth, drawHeight)
     } catch (err) {
-      skippedImages.push(img.filename)
+      console.error(`PDF image load failed for ${img.filename}:`, err)
+      doc.setFontSize(12)
+      doc.setTextColor(180)
+      doc.text('Image could not be loaded', pageWidth / 2, imgAreaTop + imgAreaHeight / 2, { align: 'center' })
       doc.setFontSize(8)
-      doc.setTextColor(150)
-      doc.text('Image unavailable', x + IMG_WIDTH / 2, imgY + IMG_HEIGHT / 2, { align: 'center' })
+      doc.text(img.original_filename || img.filename, pageWidth / 2, imgAreaTop + imgAreaHeight / 2 + 8, { align: 'center' })
       doc.setTextColor(0)
     }
-
-    // Caption
-    doc.setFontSize(7)
-    doc.setTextColor(100)
-    doc.text(`${img.scope?.toUpperCase() || ''} - ${formatDate(img.created)}`, x, imgY + IMG_HEIGHT + 4)
-    doc.setTextColor(0)
   }
 
-  // Footer
+  // ─── Page numbers footer ─────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
     doc.setFontSize(8)
     doc.setTextColor(150)
     doc.text(
-      `Page ${p} of ${totalPages} | ${selectedImages.length} images | IXOPE Medical`,
+      `Page ${p} of ${totalPages} · IXOPE Medical · ${patientInfo.name} (${patientInfo.id})`,
       pageWidth / 2,
-      doc.internal.pageSize.getHeight() - 10,
+      pageHeight - 8,
       { align: 'center' }
     )
   }
@@ -118,3 +198,14 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
   return doc.output('blob')
 }
 
+/**
+ * Get image dimensions from base64 data URL
+ */
+function getImageDimensions(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.width, height: img.height })
+    img.onerror = () => resolve({ width: 4, height: 3 })
+    img.src = dataUrl
+  })
+}

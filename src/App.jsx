@@ -11,24 +11,54 @@ import { Toaster } from 'react-hot-toast'
 const MAINTENANCE_MODE = true
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Retry wrapper for lazy imports — handles chunk load failures after deploy
+function lazyRetry(importFn) {
+  return lazy(() =>
+    importFn().catch(() => {
+      // Chunk failed to load (likely outdated after deploy) — reload once
+      const hasReloaded = sessionStorage.getItem('chunk_reload')
+      if (!hasReloaded) {
+        sessionStorage.setItem('chunk_reload', '1')
+        window.location.reload()
+        return { default: () => null }
+      }
+      sessionStorage.removeItem('chunk_reload')
+      // If reload didn't help, show error
+      return { default: () => <ChunkError /> }
+    })
+  )
+}
+
 // Lazy-loaded pages
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const ScopeGallery = lazy(() => import('./pages/ScopeGallery'))
-const LiveFeed = lazy(() => import('./pages/LiveFeed'))
-const Uploads = lazy(() => import('./pages/Uploads'))
-const Reports = lazy(() => import('./pages/Reports'))
-const DeviceManagement = lazy(() => import('./pages/DeviceManagement'))
+const Dashboard = lazyRetry(() => import('./pages/Dashboard'))
+const ScopeGallery = lazyRetry(() => import('./pages/ScopeGallery'))
+const LiveFeed = lazyRetry(() => import('./pages/LiveFeed'))
+const Uploads = lazyRetry(() => import('./pages/Uploads'))
+const Reports = lazyRetry(() => import('./pages/Reports'))
+const DeviceManagement = lazyRetry(() => import('./pages/DeviceManagement'))
 
 // Admin pages
-const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'))
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
-const AdminDevices = lazy(() => import('./pages/admin/AdminDevices'))
-const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'))
+const AdminLogin = lazyRetry(() => import('./pages/admin/AdminLogin'))
+const AdminDashboard = lazyRetry(() => import('./pages/admin/AdminDashboard'))
+const AdminDevices = lazyRetry(() => import('./pages/admin/AdminDevices'))
+const AdminUsers = lazyRetry(() => import('./pages/admin/AdminUsers'))
 
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-64">
       <div className="w-8 h-8 border-4 border-medical-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
+
+function ChunkError() {
+  return (
+    <div className="flex flex-col items-center justify-center h-64 text-center">
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white">Update Available</h2>
+      <p className="text-gray-500 mt-2">A new version is available. Please refresh.</p>
+      <button onClick={() => { sessionStorage.removeItem('chunk_reload'); window.location.reload() }} className="mt-4 btn-primary">
+        Refresh Page
+      </button>
     </div>
   )
 }

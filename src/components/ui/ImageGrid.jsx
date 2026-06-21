@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { formatFileSize } from '../../utils/formatters'
 import { SERVER_URL } from '../../config/device'
-import { ImageOff } from 'lucide-react'
+import { ImageOff, Trash2 } from 'lucide-react'
+import { useDeleteImageMutation } from '../../services/api'
 
 export default function ImageGrid({ images = [], onImageClick, selectable = false, selectedIds = [], onSelectionChange }) {
   const [failedImages, setFailedImages] = useState(new Set())
+  const [confirmId, setConfirmId] = useState(null)
+  const [deleteImage, { isLoading: isDeleting }] = useDeleteImageMutation()
 
   const handleError = (filename) => {
     setFailedImages((prev) => new Set([...prev, filename]))
@@ -20,13 +23,30 @@ export default function ImageGrid({ images = [], onImageClick, selectable = fals
     }
   }
 
+  const handleDelete = async (e, img) => {
+    e.stopPropagation()
+    if (confirmId === img.id) {
+      try {
+        await deleteImage(img.id).unwrap()
+      } catch (err) {
+        console.error('Delete failed:', err)
+      }
+      setConfirmId(null)
+    } else {
+      setConfirmId(img.id)
+      // Auto-dismiss confirm after 3s
+      setTimeout(() => setConfirmId((prev) => prev === img.id ? null : prev), 3000)
+    }
+  }
+
   if (!images.length) return null
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
       {images.map((img, idx) => {
-        // Direct image file URL - strip /api prefix if present
-        const rawUrl = (img.url || '').replace(/^\/api/, '')
+        // Direct image file URL - ensure /captures prefix
+        let rawUrl = (img.url || '').replace(/^\/api/, '')
+        if (!rawUrl.startsWith('/captures')) rawUrl = `/captures${rawUrl}`
         const imgSrc = `${SERVER_URL}${rawUrl}`
 
         return (
@@ -51,6 +71,27 @@ export default function ImageGrid({ images = [], onImageClick, selectable = fals
                 </div>
               </div>
             )}
+
+            {/* Delete button (top-right, on hover) */}
+            <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+              {confirmId === img.id ? (
+                <button
+                  onClick={(e) => handleDelete(e, img)}
+                  disabled={isDeleting}
+                  className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-lg shadow-lg hover:bg-red-600 transition-colors"
+                >
+                  {isDeleting ? '...' : 'Confirm'}
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => handleDelete(e, img)}
+                  className="p-1.5 bg-black/50 backdrop-blur-sm rounded-lg text-white/80 hover:text-white hover:bg-red-500/80 transition-colors"
+                  title="Delete image"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
 
             {/* Image thumbnail */}
             {failedImages.has(img.filename) ? (
