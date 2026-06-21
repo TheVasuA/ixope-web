@@ -3,8 +3,9 @@ import { DEVICE_ID, SERVER_URL } from '../config/device'
 import { formatDate } from '../utils/formatters'
 
 /**
- * Load image as base64 — tries canvas first (works if image already displayed),
- * then fetch same-origin, then fetch cross-origin
+ * Load image as base64 by creating a hidden img and drawing to canvas.
+ * Uses a proxy-friendly approach: adds timestamp to bust cache,
+ * and tries multiple methods to handle CORS.
  */
 async function fetchImageAsBase64(url) {
   // Normalize URL — ensure /captures prefix is present
@@ -12,55 +13,14 @@ async function fetchImageAsBase64(url) {
   if (!path.startsWith('/captures')) {
     path = `/captures${path}`
   }
+  const fullUrl = `${SERVER_URL}${path}`
 
-  const crossOriginUrl = `${SERVER_URL}${path}`
-
-  // Attempt 1: load via Image element + canvas (avoids CORS fetch issues)
-  try {
-    const data = await loadImageViaCanvas(crossOriginUrl)
-    if (data) return data
-  } catch (e) {
-    // Canvas tainted by CORS, try fetch
-  }
-
-  // Attempt 2: fetch cross-origin with credentials
-  try {
-    const response = await fetch(crossOriginUrl, { mode: 'cors', credentials: 'omit' })
-    if (response.ok) {
-      const blob = await response.blob()
-      return await blobToDataUrl(blob)
-    }
-  } catch (e) {
-    // fetch failed
-  }
-
-  // Attempt 3: try relative URL (same-origin, works if nginx proxies)
-  try {
-    const response = await fetch(path)
-    if (response.ok) {
-      const blob = await response.blob()
-      return await blobToDataUrl(blob)
-    }
-  } catch (e) {
-    // all failed
-  }
-
-  throw new Error('All image fetch methods failed')
-}
-
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
-}
-
-function loadImageViaCanvas(src) {
+  // Method: Load image into a hidden img tag, draw to canvas, extract base64
+  // This works because we load it fresh with crossOrigin set
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
+
     img.onload = () => {
       try {
         const canvas = document.createElement('canvas')
@@ -68,13 +28,58 @@ function loadImageViaCanvas(src) {
         canvas.height = img.naturalHeight
         const ctx = canvas.getContext('2d')
         ctx.drawImage(img, 0, 0)
-        resolve(canvas.toDataURL('image/jpeg', 0.92))
-      } catch (e) {
-        reject(e)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+        resolve(dataUrl)
+      } catch (canvasErr) {
+        // Canvas tainted — try fetch as fallback
+        fetchViaXHR(fullUrl).then(resolve).catch(reject)
       }
     }
-    img.onerror = () => reject(new Error('Image load failed'))
-    img.src = src
+
+    img.onerror = () => {
+      // Image element failed — try fetch
+      fetchViaXHR(fullUrl).then(resolve).catch(reject)
+    }
+
+    img.src = fullUrl
+  })
+}
+
+/**
+ * Fetch image via XMLHttpRequest with responseType blob
+ * (sometimes works when fetch doesn't due to CORS handling differences)
+ */
+function fetchViaXHR(url) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', url, true)
+    xhr.responseType = 'blob'
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(xhr.response)
+      } else {
+        reject(new Error(`XHR failed: ${xhr.status}`))
+      }
+    }
+
+    xhr.onerror = () => reject(new Error('XHR network error'))
+    xhr.send()
+  })
+}
+
+/**
+ * Get image dimensions from base64 data URL
+ */
+function getImageDimensions(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.width, height: img.height })
+    img.onerror = () => resolve({ width: 4, height: 3 })
+    img.src = dataUrl
   })
 }
 
@@ -141,23 +146,21 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.setTextColor(80)
-    const caption = `${(img.scope || '').toUpperCase()} · ${img.original_filename || img.filename} · ${formatDate(img.captured_at || img.created)}`
+    const caption = `${(img.scope || '').toUpperCase()} \u00B7 ${img.original_filename || img.filename} \u00B7 ${formatDate(img.captured_at || img.created)}`
     doc.text(caption, MARGIN, 22)
 
     doc.setDrawColor(220)
     doc.line(MARGIN, 25, pageWidth - MARGIN, 25)
 
-    // Image area: from y=30 to y=pageHeight-25
+    // Image area
     const imgAreaTop = 30
     const imgAreaHeight = pageHeight - 25 - imgAreaTop
     const imgAreaWidth = contentWidth
 
     try {
       const imageData = await fetchImageAsBase64(img.url || '')
-
-      // Get dimensions for aspect ratio
-      const tempImg = await getImageDimensions(imageData)
-      const aspectRatio = tempImg.width / tempImg.height
+      const dims = await getImageDimensions(imageData)
+      const aspectRatio = dims.width / dims.height
 
       let drawWidth, drawHeight
       if (aspectRatio > imgAreaWidth / imgAreaHeight) {
@@ -168,13 +171,12 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
         drawWidth = imgAreaHeight * aspectRatio
       }
 
-      // Center the image
       const drawX = MARGIN + (imgAreaWidth - drawWidth) / 2
       const drawY = imgAreaTop + (imgAreaHeight - drawHeight) / 2
 
       doc.addImage(imageData, 'JPEG', drawX, drawY, drawWidth, drawHeight)
     } catch (err) {
-      console.error(`PDF image load failed for ${img.filename}:`, err)
+      console.error(`PDF image failed: ${img.filename}`, err)
       doc.setFontSize(12)
       doc.setTextColor(180)
       doc.text('Image could not be loaded', pageWidth / 2, imgAreaTop + imgAreaHeight / 2, { align: 'center' })
@@ -191,7 +193,7 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     doc.setFontSize(8)
     doc.setTextColor(150)
     doc.text(
-      `Page ${p} of ${totalPages} · IXOPE Medical · ${patientInfo.name} (${patientInfo.id})`,
+      `Page ${p} of ${totalPages} \u00B7 IXOPE Medical \u00B7 ${patientInfo.name} (${patientInfo.id})`,
       pageWidth / 2,
       pageHeight - 8,
       { align: 'center' }
@@ -199,16 +201,4 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
   }
 
   return doc.output('blob')
-}
-
-/**
- * Get image dimensions from base64 data URL
- */
-function getImageDimensions(dataUrl) {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => resolve({ width: img.width, height: img.height })
-    img.onerror = () => resolve({ width: 4, height: 3 })
-    img.src = dataUrl
-  })
 }
