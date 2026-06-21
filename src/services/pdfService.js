@@ -3,8 +3,8 @@ import { DEVICE_ID, SERVER_URL } from '../config/device'
 import { formatDate } from '../utils/formatters'
 
 /**
- * Load image as base64 using canvas approach (works cross-origin if headers allow,
- * falls back to same-origin fetch via relative URL)
+ * Load image as base64 — tries canvas first (works if image already displayed),
+ * then fetch same-origin, then fetch cross-origin
  */
 async function fetchImageAsBase64(url) {
   // Normalize URL — ensure /captures prefix is present
@@ -13,36 +13,39 @@ async function fetchImageAsBase64(url) {
     path = `/captures${path}`
   }
 
-  // Try same-origin first (relative URL — goes through nginx/proxy)
-  // This avoids CORS entirely
-  const sameOriginUrl = path
-  // Full cross-origin URL as fallback
   const crossOriginUrl = `${SERVER_URL}${path}`
 
-  // Attempt 1: fetch via same-origin (relative path)
+  // Attempt 1: load via Image element + canvas (avoids CORS fetch issues)
   try {
-    const response = await fetch(sameOriginUrl)
+    const data = await loadImageViaCanvas(crossOriginUrl)
+    if (data) return data
+  } catch (e) {
+    // Canvas tainted by CORS, try fetch
+  }
+
+  // Attempt 2: fetch cross-origin with credentials
+  try {
+    const response = await fetch(crossOriginUrl, { mode: 'cors', credentials: 'omit' })
     if (response.ok) {
       const blob = await response.blob()
       return await blobToDataUrl(blob)
     }
   } catch (e) {
-    // Same-origin failed, try cross-origin
+    // fetch failed
   }
 
-  // Attempt 2: fetch cross-origin
+  // Attempt 3: try relative URL (same-origin, works if nginx proxies)
   try {
-    const response = await fetch(crossOriginUrl, { mode: 'cors' })
+    const response = await fetch(path)
     if (response.ok) {
       const blob = await response.blob()
       return await blobToDataUrl(blob)
     }
   } catch (e) {
-    // Cross-origin fetch failed
+    // all failed
   }
 
-  // Attempt 3: load via Image element + canvas (bypasses some CORS issues)
-  return await loadImageViaCanvas(crossOriginUrl)
+  throw new Error('All image fetch methods failed')
 }
 
 function blobToDataUrl(blob) {
