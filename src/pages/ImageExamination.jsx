@@ -58,6 +58,9 @@ export default function ImageExamination() {
   const [snapshots, setSnapshots] = useState([])
   const [selectedForPdf, setSelectedForPdf] = useState([])
   const [capturing, setCapturing] = useState(false)
+  const [snapshotNotes, setSnapshotNotes] = useState({}) // { snapId: 'note text' }
+  const [imgError, setImgError] = useState(false)
+  const [imgLoading, setImgLoading] = useState(false)
 
   const imageRef = useRef(null)
   const isDragging = useRef(false)
@@ -96,6 +99,8 @@ export default function ImageExamination() {
     setViewingImage(img)
     setZoom(1)
     setPan({ x: 0, y: 0 })
+    setImgError(false)
+    setImgLoading(true)
   }
 
   // Pan handlers
@@ -131,6 +136,12 @@ export default function ImageExamination() {
 
     setCapturing(true)
     try {
+      // Fetch the image as a blob to avoid cross-origin canvas taint
+      const imgUrl = getImgUrl(viewingImage)
+      const response = await fetch(imgUrl)
+      const imgBlob = await response.blob()
+      const imageBitmap = await createImageBitmap(imgBlob)
+
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       const container = imageRef.current.parentElement
@@ -138,14 +149,13 @@ export default function ImageExamination() {
       const imgEl = imageRef.current
       const imgRect = imgEl.getBoundingClientRect()
 
-      // Canvas = viewport size
-      canvas.width = containerRect.width * 2  // 2x for quality
+      // Canvas = viewport size at 2x for quality
+      canvas.width = containerRect.width * 2
       canvas.height = containerRect.height * 2
 
-      // Draw the visible portion of the image directly from the img element
-      // Scale source coordinates to natural image dimensions
-      const scaleX = imgEl.naturalWidth / imgRect.width
-      const scaleY = imgEl.naturalHeight / imgRect.height
+      // Calculate visible portion using bitmap natural dimensions
+      const scaleX = imageBitmap.width / imgRect.width
+      const scaleY = imageBitmap.height / imgRect.height
 
       const sx = (containerRect.left - imgRect.left) * scaleX
       const sy = (containerRect.top - imgRect.top) * scaleY
@@ -153,12 +163,13 @@ export default function ImageExamination() {
       const sh = containerRect.height * scaleY
 
       ctx.drawImage(
-        imgEl,
+        imageBitmap,
         Math.max(0, sx), Math.max(0, sy),
-        Math.min(sw, imgEl.naturalWidth - Math.max(0, sx)),
-        Math.min(sh, imgEl.naturalHeight - Math.max(0, sy)),
+        Math.min(sw, imageBitmap.width - Math.max(0, sx)),
+        Math.min(sh, imageBitmap.height - Math.max(0, sy)),
         0, 0, canvas.width, canvas.height
       )
+      imageBitmap.close()
 
       // Convert canvas to blob for upload
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
@@ -230,12 +241,19 @@ export default function ImageExamination() {
   const removeSnapshot = (snapId) => {
     setSnapshots((prev) => prev.filter((s) => s.id !== snapId))
     setSelectedForPdf((prev) => prev.filter((id) => id !== snapId))
+    setSnapshotNotes((prev) => { const n = { ...prev }; delete n[snapId]; return n })
   }
 
-  // Image URL helper
+  const updateSnapshotNote = (snapId, text) => {
+    setSnapshotNotes((prev) => ({ ...prev, [snapId]: text }))
+  }
+
+  // Image URL helper — use same-origin proxy path when available
   const getImgUrl = (img) => {
     let rawUrl = (img.url || '').replace(/^\/api/, '')
     if (!rawUrl.startsWith('/captures')) rawUrl = `/captures${rawUrl}`
+    // In production, try same-origin first (via Cloudflare proxy or nginx)
+    // Fall back to full API URL if needed
     return `${SERVER_URL}${rawUrl}`
   }
 
@@ -415,18 +433,34 @@ export default function ImageExamination() {
               style={{ cursor: zoom > 1 ? 'grab' : 'default' }}
             >
               {viewingImage ? (
-                <img
-                  ref={imageRef}
-                  src={getImgUrl(viewingImage)}
-                  alt={viewingImage.filename}
-                  crossOrigin="anonymous"
-                  className="absolute top-1/2 left-1/2 max-w-full max-h-full object-contain transition-transform duration-100"
-                  style={{
-                    transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                    transformOrigin: 'center center',
-                  }}
-                  draggable={false}
-                />
+                <>
+                  {imgLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
+                      <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+                    </div>
+                  )}
+                  {imgError ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                      <X size={32} className="mb-2" />
+                      <p className="text-sm">Failed to load image</p>
+                      <p className="text-xs text-gray-500 mt-1">{viewingImage.filename}</p>
+                    </div>
+                  ) : (
+                    <img
+                      ref={imageRef}
+                      src={getImgUrl(viewingImage)}
+                      alt={viewingImage.filename}
+                      className="absolute top-1/2 left-1/2 max-w-full max-h-full object-contain transition-transform duration-100"
+                      style={{
+                        transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                        transformOrigin: 'center center',
+                      }}
+                      draggable={false}
+                      onLoad={() => setImgLoading(false)}
+                      onError={() => { setImgLoading(false); setImgError(true) }}
+                    />
+                  )}
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500">
                   <Maximize2 size={48} className="mb-3 text-gray-600" />
@@ -456,7 +490,7 @@ export default function ImageExamination() {
         </div>
       </div>
 
-      {/* ─── Captured Snapshots ────────────────────────────────────────── */}
+      {/* ─── Captured Snapshots with Notes ─────────────────────────────── */}
       {snapshots.length > 0 && (
         <section className="medical-card">
           <div className="flex items-center justify-between mb-4">
@@ -481,61 +515,95 @@ export default function ImageExamination() {
                 className="flex items-center gap-2 px-4 py-2 bg-medical-500 hover:bg-medical-600 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 <FileText size={16} />
-                Go to Reports to generate PDF
+                Generate PDF
               </a>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {/* Snapshot cards with notes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {snapshots.map((snap) => (
               <div
                 key={snap.id}
-                className="relative group rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-all duration-200"
+                className={`relative rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                  selectedForPdf.includes(snap.id)
+                    ? 'border-medical-500 ring-2 ring-medical-500/20 shadow-lg'
+                    : 'border-gray-200 dark:border-gray-700'
+                }`}
               >
-                {/* Upload success badge */}
-                {snap.uploaded && (
-                  <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-medium">
-                    <CheckCircle2 size={10} />
-                    Saved
-                  </div>
-                )}
-
-                {/* Remove button */}
-                <button
-                  onClick={() => removeSnapshot(snap.id)}
-                  className="absolute top-2 right-2 z-10 p-1 rounded-md bg-black/40 backdrop-blur-sm text-white/70 hover:text-white hover:bg-red-500/80 opacity-0 group-hover:opacity-100 transition-all"
+                {/* Image + selection click area */}
+                <div
+                  className="relative cursor-pointer group"
+                  onClick={() => togglePdfSelect(snap.id)}
                 >
-                  <X size={12} />
-                </button>
+                  {/* Selection checkbox */}
+                  <div className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md flex items-center justify-center transition-all ${
+                    selectedForPdf.includes(snap.id)
+                      ? 'bg-medical-500 shadow-md'
+                      : 'bg-black/40 backdrop-blur-sm border border-white/30'
+                  }`}>
+                    {selectedForPdf.includes(snap.id) && <Check size={12} className="text-white" />}
+                  </div>
 
-                {/* Snapshot image */}
-                <div className="aspect-square">
-                  <img
-                    src={snap.dataUrl}
-                    alt={`Snapshot ${snap.id}`}
-                    className="w-full h-full object-cover"
-                  />
+                  {/* Upload badge */}
+                  {snap.uploaded && (
+                    <div className="absolute top-2 right-10 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-medium">
+                      <CheckCircle2 size={10} />
+                      Saved
+                    </div>
+                  )}
+
+                  {/* Remove button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeSnapshot(snap.id) }}
+                    className="absolute top-2 right-2 z-10 p-1 rounded-md bg-black/40 backdrop-blur-sm text-white/70 hover:text-white hover:bg-red-500/80 opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <X size={12} />
+                  </button>
+
+                  {/* Snapshot image */}
+                  <div className="aspect-video">
+                    <img
+                      src={snap.dataUrl}
+                      alt={`Snapshot ${snap.id}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Info overlay */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-white/80 font-medium">{snap.zoom}</span>
+                      <span className="text-[11px] text-white/50">{snap.timestamp}</span>
+                    </div>
+                    {snap.bodyPart && (
+                      <span className="text-[11px] text-amber-300 font-medium">
+                        {SKIN_BODY_PARTS.find((p) => p.id === snap.bodyPart)?.label}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Info overlay */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-white/70 font-medium">{snap.zoom}</span>
-                    <span className="text-[10px] text-white/50">{snap.timestamp}</span>
-                  </div>
-                  {snap.bodyPart && (
-                    <span className="text-[10px] text-amber-300 font-medium">
-                      {SKIN_BODY_PARTS.find((p) => p.id === snap.bodyPart)?.label}
-                    </span>
-                  )}
+                {/* Notes input */}
+                <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50">
+                  <label className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                    Description / Notes
+                  </label>
+                  <textarea
+                    value={snapshotNotes[snap.id] || ''}
+                    onChange={(e) => updateSnapshotNote(snap.id, e.target.value)}
+                    placeholder="Add clinical notes for this image..."
+                    rows={2}
+                    className="w-full mt-1 px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:ring-1 focus:ring-medical-500 focus:border-medical-500 outline-none transition-colors"
+                  />
                 </div>
               </div>
             ))}
           </div>
 
-          <p className="mt-3 text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+          <p className="mt-4 text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
             <Upload size={12} />
-            All snapshots are automatically saved to the server gallery. Use the Reports page to select and generate PDF.
+            All snapshots are saved to the server. Notes will appear as descriptions below each image in the PDF report.
           </p>
         </section>
       )}
