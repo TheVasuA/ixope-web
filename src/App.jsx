@@ -123,7 +123,7 @@ export default function App() {
       </Routes>
 
       {/* Auth gate — show Google Sign-In modal if not logged in (portal routes only) */}
-      {!isAuthenticated && <GoogleSignInModal />}
+      {!isAuthenticated && !window.location.pathname.startsWith('/admin') && <GoogleSignInModal />}
     </>
   )
 }
