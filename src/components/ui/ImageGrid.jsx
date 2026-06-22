@@ -4,7 +4,7 @@ import { SERVER_URL } from '../../config/device'
 import { ImageOff, Trash2 } from 'lucide-react'
 import { useDeleteImageMutation } from '../../services/api'
 
-export default function ImageGrid({ images = [], onImageClick, selectable = false, selectedIds = [], onSelectionChange }) {
+export default function ImageGrid({ images = [], onImageClick, selectable = false, selectedIds = [], onSelectionChange, maxCols = 5 }) {
   const [failedImages, setFailedImages] = useState(new Set())
   const [confirmId, setConfirmId] = useState(null)
   const [deleteImage, { isLoading: isDeleting }] = useDeleteImageMutation()
@@ -42,7 +42,11 @@ export default function ImageGrid({ images = [], onImageClick, selectable = fals
   if (!images.length) return null
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+    <div className={`grid gap-3 ${
+      maxCols === 4
+        ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+        : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+    }`}>
       {images.map((img, idx) => {
         // Direct image file URL - ensure /captures prefix
         let rawUrl = (img.url || '').replace(/^\/api/, '')
