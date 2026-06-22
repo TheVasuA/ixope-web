@@ -8,6 +8,7 @@ import {
   ChevronLeft, ChevronRight, X, ExternalLink
 } from 'lucide-react'
 import { generateMedicalReport } from '../services/pdfService'
+import { convertImagesToDicom } from '../services/dicomService'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
 
@@ -73,22 +74,51 @@ export default function Reports() {
     try {
       const zip = new JSZip()
 
+      // 1. Generate PDF with selected images
       if (selectedImages.length > 0) {
         const pdfBlob = await generateMedicalReport(selectedImages, patientInfo)
         zip.file('ixope-report.pdf', pdfBlob)
         setPdfUrl(URL.createObjectURL(pdfBlob))
+      }
 
+      // 2. Add original images to ZIP
+      const dicomInputs = []
+      if (selectedImages.length > 0) {
         const imageFolder = zip.folder('images')
         for (const img of selectedImages) {
           try {
             let rawUrl = (img.url || '').replace(/^\/api/, '')
             if (!rawUrl.startsWith('/captures')) rawUrl = `/captures${rawUrl}`
             const res = await fetch(`${SERVER_URL}${rawUrl}`)
-            if (res.ok) imageFolder.file(img.original_filename || img.filename, await res.blob())
+            if (res.ok) {
+              const blob = await res.blob()
+              const filename = img.original_filename || img.filename
+              imageFolder.file(filename, blob)
+              // Collect for DICOM conversion
+              dicomInputs.push({
+                blob,
+                metadata: {
+                  scope: img.scope || '',
+                  bodyPart: (img.notes || '').match(/\[body_part:(\w+)\]/)?.[1] || '',
+                  notes: (img.notes || '').replace(/\[body_part:\w+\]\s*/, ''),
+                  filename,
+                },
+              })
+            }
           } catch (err) { console.error(err) }
         }
       }
 
+      // 3. Convert images to DICOM and add to ZIP
+      if (dicomInputs.length > 0) {
+        const dicomFolder = zip.folder('DICOM')
+        const dicomFiles = await convertImagesToDicom(dicomInputs, patientInfo)
+        for (const dcm of dicomFiles) {
+          dicomFolder.file(dcm.filename, dcm.arrayBuffer)
+        }
+      }
+
+      // 4. Add selected videos to ZIP
       if (selectedVideoIds.length > 0) {
         const videoFolder = zip.folder('videos')
         for (const videoId of selectedVideoIds) {
@@ -101,6 +131,7 @@ export default function Reports() {
         }
       }
 
+      // 5. Generate and download ZIP
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(zipBlob)
