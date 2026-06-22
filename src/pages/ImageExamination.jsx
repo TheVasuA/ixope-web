@@ -131,12 +131,6 @@ export default function ImageExamination() {
 
     setCapturing(true)
     try {
-      // Load image via fetch to avoid CORS taint on canvas
-      const imgUrl = getImgUrl(viewingImage)
-      const response = await fetch(imgUrl)
-      const imgBlob = await response.blob()
-      const imageBitmap = await createImageBitmap(imgBlob)
-
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       const container = imageRef.current.parentElement
@@ -145,18 +139,24 @@ export default function ImageExamination() {
       const imgRect = imgEl.getBoundingClientRect()
 
       // Canvas = viewport size
-      canvas.width = containerRect.width
-      canvas.height = containerRect.height
+      canvas.width = containerRect.width * 2  // 2x for quality
+      canvas.height = containerRect.height * 2
 
-      // Calculate the visible portion based on current zoom & pan
-      const sx = (containerRect.left - imgRect.left) * (imageBitmap.width / imgRect.width)
-      const sy = (containerRect.top - imgRect.top) * (imageBitmap.height / imgRect.height)
-      const sw = containerRect.width * (imageBitmap.width / imgRect.width)
-      const sh = containerRect.height * (imageBitmap.height / imgRect.height)
+      // Draw the visible portion of the image directly from the img element
+      // Scale source coordinates to natural image dimensions
+      const scaleX = imgEl.naturalWidth / imgRect.width
+      const scaleY = imgEl.naturalHeight / imgRect.height
+
+      const sx = (containerRect.left - imgRect.left) * scaleX
+      const sy = (containerRect.top - imgRect.top) * scaleY
+      const sw = containerRect.width * scaleX
+      const sh = containerRect.height * scaleY
 
       ctx.drawImage(
-        imageBitmap,
-        Math.max(0, sx), Math.max(0, sy), Math.min(sw, imageBitmap.width), Math.min(sh, imageBitmap.height),
+        imgEl,
+        Math.max(0, sx), Math.max(0, sy),
+        Math.min(sw, imgEl.naturalWidth - Math.max(0, sx)),
+        Math.min(sh, imgEl.naturalHeight - Math.max(0, sy)),
         0, 0, canvas.width, canvas.height
       )
 
@@ -166,7 +166,7 @@ export default function ImageExamination() {
       const fileName = `SNAP_${(sampleType || 'exam').toUpperCase()}_${timestamp}.jpg`
       const file = new File([blob], fileName, { type: 'image/jpeg' })
 
-      // Upload to server — saves in the scope's gallery (e.g. derm)
+      // Upload to server
       const scope = sampleType || 'derm'
       const result = await uploadSnapshot({
         file,
