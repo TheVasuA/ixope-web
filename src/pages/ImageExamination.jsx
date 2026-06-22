@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { useGetAllImagesQuery, useUploadSnapshotMutation } from '../services/api'
+import { useGetAllImagesQuery, useUploadSnapshotMutation, useUpdateImageNotesMutation } from '../services/api'
 import { SERVER_URL } from '../config/device'
 import {
   Eye, Ear, Scan, ZoomIn, ZoomOut, Camera, FileText, Download,
@@ -69,6 +69,7 @@ export default function ImageExamination() {
   // API
   const { data: allImages } = useGetAllImagesQuery()
   const [uploadSnapshot] = useUploadSnapshotMutation()
+  const [updateImageNotes] = useUpdateImageNotesMutation()
 
   const images = useMemo(() => {
     if (!allImages) return []
@@ -246,6 +247,18 @@ export default function ImageExamination() {
 
   const updateSnapshotNote = (snapId, text) => {
     setSnapshotNotes((prev) => ({ ...prev, [snapId]: text }))
+  }
+
+  // Save notes to server on blur (debounced save)
+  const saveNotesToServer = async (snapId) => {
+    const notes = snapshotNotes[snapId]
+    if (notes === undefined) return
+    try {
+      await updateImageNotes({ imageId: snapId, notes }).unwrap()
+    } catch (err) {
+      console.error('Failed to save notes:', err)
+      toast.error('Failed to save notes')
+    }
   }
 
   // Image URL helper — use same-origin proxy path when available
@@ -592,6 +605,7 @@ export default function ImageExamination() {
                   <textarea
                     value={snapshotNotes[snap.id] || ''}
                     onChange={(e) => updateSnapshotNote(snap.id, e.target.value)}
+                    onBlur={() => saveNotesToServer(snap.id)}
                     placeholder="Add clinical notes for this image..."
                     rows={2}
                     className="w-full mt-1 px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 resize-none focus:ring-1 focus:ring-medical-500 focus:border-medical-500 outline-none transition-colors"

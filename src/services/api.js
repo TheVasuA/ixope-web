@@ -54,6 +54,15 @@ export const ixopeApi = createApi({
       invalidatesTags: ['Images'],
     }),
 
+    // ─── Update Image Notes ────────────────────────────────────────────
+    updateImageNotes: builder.mutation({
+      query: ({ imageId, notes }) => ({
+        url: `/captures/images/${imageId}/notes?notes=${encodeURIComponent(notes)}`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['Images'],
+    }),
+
     // ─── Videos ────────────────────────────────────────────────────────
     getAllVideos: builder.query({
       query: () => `/captures/videos?device_id=${DEVICE_ID}`,
@@ -113,6 +122,7 @@ export const {
   useDeleteVideoMutation,
   useDeleteImageMutation,
   useUploadSnapshotMutation,
+  useUpdateImageNotesMutation,
   useGetPatientsQuery,
   useCreatePatientMutation,
 } = ixopeApi
