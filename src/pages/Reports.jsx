@@ -237,29 +237,28 @@ export default function Reports() {
                 {pagedVideos.map((video) => (
                   <div
                     key={video.id}
-                    onClick={() => toggleVideoSelect(video.id)}
-                    className={`relative rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-150 ${
+                    className={`relative rounded-lg overflow-hidden border-2 transition-all duration-150 ${
                       selectedVideoIds.includes(video.id)
                         ? 'border-medical-500 ring-2 ring-medical-500/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'
+                        : 'border-gray-200 dark:border-gray-700'
                     }`}
                   >
                     <div className="aspect-video bg-black relative">
-                      <video src={`${SERVER_URL}/captures/videos/${video.id}/file`} className="w-full h-full object-cover" preload="metadata" muted />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                        </div>
-                      </div>
+                      <video src={`${SERVER_URL}/captures/videos/${video.id}/file`} className="w-full h-full object-cover" controls playsInline preload="metadata" muted />
                     </div>
-                    <div className={`absolute top-1 left-1 w-4 h-4 rounded flex items-center justify-center text-white ${
-                      selectedVideoIds.includes(video.id) ? 'bg-medical-500' : 'bg-black/30 border border-white/40'
-                    }`}>
+                    {/* Checkbox — separate from video controls */}
+                    <div
+                      onClick={() => toggleVideoSelect(video.id)}
+                      className={`absolute top-1.5 left-1.5 w-5 h-5 rounded flex items-center justify-center cursor-pointer z-10 transition-all ${
+                        selectedVideoIds.includes(video.id) ? 'bg-medical-500' : 'bg-black/40 backdrop-blur-sm border border-white/40 hover:border-white/70'
+                      }`}
+                    >
                       {selectedVideoIds.includes(video.id) && (
-                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                        <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                       )}
                     </div>
-                    <div className="px-2 py-1.5 bg-white dark:bg-gray-800">
+                    {/* Info bar — click to select */}
+                    <div onClick={() => toggleVideoSelect(video.id)} className="px-2 py-1.5 bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <p className="text-[10px] font-medium text-gray-700 dark:text-gray-300 truncate">{video.original_filename || video.filename}</p>
                       <p className="text-[9px] text-gray-400 uppercase">{video.scope}</p>
                     </div>
