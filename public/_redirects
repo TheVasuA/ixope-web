@@ -1,0 +1,3 @@
+# SPA fallback — only for paths that don't match a static file
+# Cloudflare Pages serves static files first, then falls back to this
+/* /index.html 200
