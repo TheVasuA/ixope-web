@@ -11,7 +11,7 @@ import { generateMedicalReport } from '../services/pdfService'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
 
-const IMG_PAGE_SIZE = 12
+const IMG_PAGE_SIZE = 16
 const VID_PAGE_SIZE = 6
 
 export default function Reports() {
@@ -195,10 +195,10 @@ export default function Reports() {
                 ))}
               </div>
               {imgTotalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <button onClick={() => setImgPage((p) => Math.max(0, p - 1))} disabled={imgPage === 0} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronLeft size={16} /></button>
-                  <span className="text-[11px] text-gray-500">{imgPage + 1}/{imgTotalPages}</span>
-                  <button onClick={() => setImgPage((p) => Math.min(imgTotalPages - 1, p + 1))} disabled={imgPage === imgTotalPages - 1} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronRight size={16} /></button>
+                <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button onClick={() => setImgPage((p) => Math.max(0, p - 1))} disabled={imgPage === 0} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronLeft size={18} /></button>
+                  <span className="text-sm font-semibold text-medical-600 dark:text-medical-400 bg-medical-50 dark:bg-medical-900/30 px-3 py-1 rounded-lg">{imgPage + 1} / {imgTotalPages}</span>
+                  <button onClick={() => setImgPage((p) => Math.min(imgTotalPages - 1, p + 1))} disabled={imgPage === imgTotalPages - 1} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronRight size={18} /></button>
                 </div>
               )}
             </>
@@ -266,10 +266,10 @@ export default function Reports() {
                 ))}
               </div>
               {vidTotalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <button onClick={() => setVidPage((p) => Math.max(0, p - 1))} disabled={vidPage === 0} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronLeft size={16} /></button>
-                  <span className="text-[11px] text-gray-500">{vidPage + 1}/{vidTotalPages}</span>
-                  <button onClick={() => setVidPage((p) => Math.min(vidTotalPages - 1, p + 1))} disabled={vidPage === vidTotalPages - 1} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronRight size={16} /></button>
+                <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button onClick={() => setVidPage((p) => Math.max(0, p - 1))} disabled={vidPage === 0} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronLeft size={18} /></button>
+                  <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-lg">{vidPage + 1} / {vidTotalPages}</span>
+                  <button onClick={() => setVidPage((p) => Math.min(vidTotalPages - 1, p + 1))} disabled={vidPage === vidTotalPages - 1} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"><ChevronRight size={18} /></button>
                 </div>
               )}
             </>
