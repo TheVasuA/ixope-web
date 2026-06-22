@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useDispatch } from 'react-redux'
 import { useGetAllImagesQuery, useUploadSnapshotMutation, useUpdateImageNotesMutation } from '../services/api'
+import { selectAllImages } from '../store/slices/reportSlice'
 import { SERVER_URL } from '../config/device'
 import {
   Eye, Ear, Scan, ZoomIn, ZoomOut, Camera, FileText, Download,
@@ -49,6 +52,9 @@ const COLOR_MAP = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ImageExamination() {
+  const navigate = useNavigate()
+  const dispatch = useDispatch()
+
   // State
   const [sampleType, setSampleType] = useState(null)
   const [bodyPart, setBodyPart] = useState(null)
@@ -524,13 +530,24 @@ export default function ImageExamination() {
                 {selectedForPdf.length === snapshots.length ? 'Deselect All' : 'Select All'}
               </button>
 
-              <a
-                href="/reports"
+              <button
+                onClick={() => {
+                  // Carry snapshot selection to Reports page via Redux
+                  const snapsToSelect = snapshots.map((snap) => ({
+                    id: snap.id,
+                    filename: snap.filename,
+                    original_filename: snap.filename,
+                    scope: snap.scope,
+                    url: `/captures/images/${snap.id}/file`,
+                  }))
+                  dispatch(selectAllImages(snapsToSelect))
+                  navigate('/reports')
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-medical-500 hover:bg-medical-600 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 <FileText size={16} />
-                Generate PDF
-              </a>
+                Generate PDF ({snapshots.length})
+              </button>
             </div>
           </div>
 
