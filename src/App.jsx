@@ -36,6 +36,7 @@ const LiveFeed = lazyRetry(() => import('./pages/LiveFeed'))
 const Uploads = lazyRetry(() => import('./pages/Uploads'))
 const Reports = lazyRetry(() => import('./pages/Reports'))
 const DeviceManagement = lazyRetry(() => import('./pages/DeviceManagement'))
+const ImageExamination = lazyRetry(() => import('./pages/ImageExamination'))
 
 // Admin pages
 const AdminLogin = lazyRetry(() => import('./pages/admin/AdminLogin'))
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="/live" element={<Suspense fallback={<PageLoader />}><LiveFeed /></Suspense>} />
           <Route path="/uploads" element={<Suspense fallback={<PageLoader />}><Uploads /></Suspense>} />
           <Route path="/reports" element={<Suspense fallback={<PageLoader />}><Reports /></Suspense>} />
+          <Route path="/examination" element={<Suspense fallback={<PageLoader />}><ImageExamination /></Suspense>} />
           <Route path="/device" element={<Suspense fallback={<PageLoader />}><DeviceManagement /></Suspense>} />
           <Route path="*" element={<NotFound />} />
         </Route>

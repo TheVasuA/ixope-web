@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSidebarOpen } from '../../store/slices/uiSlice'
-import { LayoutDashboard, Eye, Ear, Scan, Microscope, Video, Upload, FileText, Settings, X, Activity } from 'lucide-react'
+import { LayoutDashboard, Eye, Ear, Scan, Microscope, Video, Upload, FileText, Settings, X, Activity, Search } from 'lucide-react'
 import { SCOPE_LABELS, SCOPE_COLORS } from '../../config/device'
 
 const scopeIcons = { opth: Eye, oto: Ear, derm: Scan, micro: Microscope }
@@ -15,6 +15,7 @@ const navItems = [
   { path: '/scope/micro', label: SCOPE_LABELS.micro, icon: Microscope, scope: 'micro' },
   { type: 'divider', label: 'Tools' },
   { path: '/live', label: 'Live Feed', icon: Video },
+  { path: '/examination', label: 'Examination', icon: Search },
   { path: '/reports', label: 'Reports', icon: FileText },
 ]
 

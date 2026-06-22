@@ -40,6 +40,20 @@ export const ixopeApi = createApi({
       invalidatesTags: ['Images'],
     }),
 
+    // ─── Snapshot Upload ───────────────────────────────────────────────
+    uploadSnapshot: builder.mutation({
+      query: ({ file, scope, bodyPart, notes }) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        return {
+          url: `/captures/images?id=${DEVICE_ID}&scope=${scope}${bodyPart ? `&body_part=${bodyPart}` : ''}${notes ? `&notes=${encodeURIComponent(notes)}` : ''}`,
+          method: 'POST',
+          body: formData,
+        }
+      },
+      invalidatesTags: ['Images'],
+    }),
+
     // ─── Videos ────────────────────────────────────────────────────────
     getAllVideos: builder.query({
       query: () => `/captures/videos?device_id=${DEVICE_ID}`,
@@ -98,6 +112,7 @@ export const {
   useGetHealthQuery,
   useDeleteVideoMutation,
   useDeleteImageMutation,
+  useUploadSnapshotMutation,
   useGetPatientsQuery,
   useCreatePatientMutation,
 } = ixopeApi
