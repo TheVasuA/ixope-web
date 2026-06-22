@@ -255,6 +255,7 @@ export default function ImageExamination() {
     if (notes === undefined) return
     try {
       await updateImageNotes({ imageId: snapId, notes }).unwrap()
+      toast.success('Notes saved', { duration: 1500, style: { fontSize: '12px' } })
     } catch (err) {
       console.error('Failed to save notes:', err)
       toast.error('Failed to save notes')
@@ -599,8 +600,9 @@ export default function ImageExamination() {
 
                 {/* Notes input */}
                 <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50">
-                  <label className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-                    Description / Notes
+                  <label className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    Notes
                   </label>
                   <textarea
                     value={snapshotNotes[snap.id] || ''}
