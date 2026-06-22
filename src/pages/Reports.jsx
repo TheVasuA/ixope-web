@@ -278,21 +278,6 @@ export default function Reports() {
         </section>
       </div>
 
-      {/* ─── Clinical Notes (separate div below) ───────────────────────── */}
-      <section className="medical-card">
-        <h2 className="font-semibold flex items-center gap-2 text-sm mb-3">
-          <FileText size={16} className="text-gray-500" />
-          Clinical Notes
-        </h2>
-        <textarea
-          value={patientInfo.notes}
-          onChange={(e) => dispatch(setPatientInfo({ notes: e.target.value }))}
-          className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 resize-none focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none"
-          rows={3}
-          placeholder="Add clinical notes for this report..."
-        />
-      </section>
-
       {/* ─── Floating Generate Button ──────────────────────────────────── */}
       {totalSelected > 0 && !showModal && (
         <div className="fixed bottom-6 right-6 z-40">
@@ -353,6 +338,16 @@ export default function Reports() {
                   value={patientInfo.dateOfBirth}
                   onChange={(e) => dispatch(setPatientInfo({ dateOfBirth: e.target.value }))}
                   className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Clinical Notes</label>
+                <textarea
+                  value={patientInfo.notes}
+                  onChange={(e) => dispatch(setPatientInfo({ notes: e.target.value }))}
+                  className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 resize-none focus:ring-2 focus:ring-medical-500 outline-none"
+                  rows={3}
+                  placeholder="Clinical notes..."
                 />
               </div>
             </div>
