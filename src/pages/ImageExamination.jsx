@@ -419,6 +419,7 @@ export default function ImageExamination() {
                   ref={imageRef}
                   src={getImgUrl(viewingImage)}
                   alt={viewingImage.filename}
+                  crossOrigin="anonymous"
                   className="absolute top-1/2 left-1/2 max-w-full max-h-full object-contain transition-transform duration-100"
                   style={{
                     transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
