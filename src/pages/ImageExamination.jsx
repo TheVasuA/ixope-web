@@ -56,8 +56,8 @@ export default function ImageExamination() {
   const dispatch = useDispatch()
 
   // State
-  const [sampleType, setSampleType] = useState(null)
-  const [bodyPart, setBodyPart] = useState(null)
+  const [sampleType, setSampleType] = useState('derm')
+  const [bodyPart, setBodyPart] = useState('arm')
   const [viewingImage, setViewingImage] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
