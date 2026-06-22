@@ -131,24 +131,34 @@ export default function ImageExamination() {
 
     setCapturing(true)
     try {
+      // Load image via fetch to avoid CORS taint on canvas
+      const imgUrl = getImgUrl(viewingImage)
+      const response = await fetch(imgUrl)
+      const imgBlob = await response.blob()
+      const imageBitmap = await createImageBitmap(imgBlob)
+
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
-      const img = imageRef.current
-      const container = img.parentElement
-
-      // Capture the visible viewport of the zoomed image
+      const container = imageRef.current.parentElement
       const containerRect = container.getBoundingClientRect()
+      const imgEl = imageRef.current
+      const imgRect = imgEl.getBoundingClientRect()
+
+      // Canvas = viewport size
       canvas.width = containerRect.width
       canvas.height = containerRect.height
 
-      // Calculate what portion of the image is visible
-      const imgRect = img.getBoundingClientRect()
-      const sx = (containerRect.left - imgRect.left) / zoom * (img.naturalWidth / img.width)
-      const sy = (containerRect.top - imgRect.top) / zoom * (img.naturalHeight / img.height)
-      const sw = containerRect.width / zoom * (img.naturalWidth / img.width)
-      const sh = containerRect.height / zoom * (img.naturalHeight / img.height)
+      // Calculate the visible portion based on current zoom & pan
+      const sx = (containerRect.left - imgRect.left) * (imageBitmap.width / imgRect.width)
+      const sy = (containerRect.top - imgRect.top) * (imageBitmap.height / imgRect.height)
+      const sw = containerRect.width * (imageBitmap.width / imgRect.width)
+      const sh = containerRect.height * (imageBitmap.height / imgRect.height)
 
-      ctx.drawImage(img, Math.max(0, sx), Math.max(0, sy), sw, sh, 0, 0, canvas.width, canvas.height)
+      ctx.drawImage(
+        imageBitmap,
+        Math.max(0, sx), Math.max(0, sy), Math.min(sw, imageBitmap.width), Math.min(sh, imageBitmap.height),
+        0, 0, canvas.width, canvas.height
+      )
 
       // Convert canvas to blob for upload
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
@@ -415,7 +425,6 @@ export default function ImageExamination() {
                     transformOrigin: 'center center',
                   }}
                   draggable={false}
-                  crossOrigin="anonymous"
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500">
