@@ -14,9 +14,9 @@ const navItems = [
   { path: '/scope/derm', label: SCOPE_LABELS.derm, icon: Scan, scope: 'derm' },
   { path: '/scope/micro', label: SCOPE_LABELS.micro, icon: Microscope, scope: 'micro' },
   { type: 'divider', label: 'Tools' },
-  { path: '/live', label: 'Live Feed', icon: Video },
   { path: '/examination', label: 'Examination', icon: Search },
   { path: '/reports', label: 'Reports', icon: FileText },
+  { path: '/live', label: 'Live Feed', icon: Video },
 ]
 
 export default function Sidebar() {
