@@ -36,6 +36,10 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
+      '/reports': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
       '/live_feed': {
         target: 'http://localhost:5000',
         changeOrigin: true,
