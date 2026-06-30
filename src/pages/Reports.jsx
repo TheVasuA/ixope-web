@@ -8,7 +8,6 @@ import {
   ChevronLeft, ChevronRight, X, ExternalLink
 } from 'lucide-react'
 import { generateMedicalReport } from '../services/pdfService'
-import { convertImagesToDicom } from '../services/dicomService'
 import toast from 'react-hot-toast'
 import JSZip from 'jszip'
 
@@ -82,7 +81,6 @@ export default function Reports() {
       }
 
       // 2. Add original images to ZIP
-      const dicomInputs = []
       if (selectedImages.length > 0) {
         const imageFolder = zip.folder('images')
         for (const img of selectedImages) {
@@ -94,27 +92,32 @@ export default function Reports() {
               const blob = await res.blob()
               const filename = img.original_filename || img.filename
               imageFolder.file(filename, blob)
-              // Collect for DICOM conversion
-              dicomInputs.push({
-                blob,
-                metadata: {
-                  scope: img.scope || '',
-                  bodyPart: (img.notes || '').match(/\[body_part:(\w+)\]/)?.[1] || '',
-                  notes: (img.notes || '').replace(/\[body_part:\w+\]\s*/, ''),
-                  filename,
-                },
-              })
             }
           } catch (err) { console.error(err) }
         }
       }
 
-      // 3. Convert images to DICOM and add to ZIP
-      if (dicomInputs.length > 0) {
+      // 3. Fetch server-generated DICOM (.dcm) files and add to ZIP
+      if (selectedImages.length > 0) {
         const dicomFolder = zip.folder('DICOM')
-        const dicomFiles = await convertImagesToDicom(dicomInputs, patientInfo)
-        for (const dcm of dicomFiles) {
-          dicomFolder.file(dcm.filename, dcm.arrayBuffer)
+        const params = new URLSearchParams({
+          patient_name: patientInfo.name || 'Anonymous',
+          patient_id: patientInfo.id || '',
+          date_of_birth: patientInfo.dateOfBirth || '',
+        }).toString()
+        for (const img of selectedImages) {
+          if (!img.id) continue
+          try {
+            const res = await fetch(`${SERVER_URL}/captures/images/${img.id}/dicom?${params}`)
+            if (res.ok) {
+              const dcmBlob = await res.blob()
+              const base = (img.original_filename || img.filename || `image_${img.id}`)
+                .replace(/\.(jpg|jpeg|png)$/i, '')
+              dicomFolder.file(`${base}.dcm`, dcmBlob)
+            } else {
+              console.error(`DICOM conversion failed for image ${img.id}: ${res.status}`)
+            }
+          } catch (err) { console.error(err) }
         }
       }
 
