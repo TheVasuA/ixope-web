@@ -63,7 +63,7 @@ export default function AdminLogin() {
                 <Shield size={28} className="text-white" />
               </div>
               <h1 className="text-2xl font-bold text-white">Admin Console</h1>
-              <p className="text-sm text-gray-400 mt-1">IXOPE Device Management System</p>
+              <p className="text-sm text-gray-400 mt-1">IXOPE Admin Console</p>
             </div>
 
             {/* Login Form */}
@@ -134,7 +134,7 @@ export default function AdminLogin() {
 
           {/* Footer */}
           <div className="px-8 py-4 bg-gray-900/30 border-t border-surface-border text-center">
-            <p className="text-xs text-gray-500">IXOPE Medical Technology · Secure Admin Access</p>
+            <p className="text-xs text-gray-500">IXOPE · Secure Admin Access</p>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { useGetAllImagesQuery, useUploadSnapshotMutation, useUpdateImageNotesMutation } from '../services/api'
@@ -49,8 +49,74 @@ const COLOR_MAP = {
   },
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// Physical field-of-view for a zoomed-in dermatoscope capture.
+const DERM_FOV_MM = 45
 
+/**
+ * Draw a 45 mm × 45 mm X–Y axis ruler along the bottom (X) and left (Y) margins
+ * of a square canvas. Origin is bottom-left. Used only for zoomed-in skin images
+ * so lesion dimensions can be measured against a known scale.
+ */
+function draw45mmScale(ctx, size) {
+  const pxPerMm = size / DERM_FOV_MM
+  const color = 'rgba(255, 235, 59, 0.95)' // yellow, high-contrast
+  const fontPx = Math.max(10, Math.round(size * 0.022))
+  const majorTick = size * 0.035
+  const minorTick = size * 0.018
+
+  ctx.save()
+  ctx.lineWidth = Math.max(1, size * 0.002)
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
+  ctx.font = `${fontPx}px sans-serif`
+  ctx.textBaseline = 'alphabetic'
+  // Dark outline for readability over bright/light images
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
+  ctx.shadowBlur = Math.max(1, size * 0.003)
+
+  const inset = ctx.lineWidth
+
+  // Axis baselines
+  ctx.beginPath()
+  ctx.moveTo(0, size - inset)
+  ctx.lineTo(size, size - inset) // X axis (bottom)
+  ctx.moveTo(inset, 0)
+  ctx.lineTo(inset, size) // Y axis (left)
+  ctx.stroke()
+
+  for (let mm = 0; mm <= DERM_FOV_MM; mm++) {
+    const isMajor = mm % 5 === 0
+    const len = isMajor ? majorTick : minorTick
+    const x = mm * pxPerMm
+    const y = size - mm * pxPerMm // origin at bottom
+
+    // X-axis tick (bottom)
+    ctx.beginPath()
+    ctx.moveTo(x, size - inset)
+    ctx.lineTo(x, size - inset - len)
+    ctx.stroke()
+
+    // Y-axis tick (left)
+    ctx.beginPath()
+    ctx.moveTo(inset, y)
+    ctx.lineTo(inset + len, y)
+    ctx.stroke()
+
+    if (isMajor && mm > 0) {
+      ctx.textAlign = 'center'
+      ctx.fillText(`${mm}`, x, size - inset - majorTick - 3)
+      ctx.textAlign = 'left'
+      ctx.fillText(`${mm}`, inset + majorTick + 3, y + fontPx * 0.35)
+    }
+  }
+
+  // Unit label
+  ctx.textAlign = 'right'
+  ctx.fillText('mm', size - 6, size - inset - majorTick - 3)
+  ctx.restore()
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function ImageExamination() {
   const navigate = useNavigate()
   const dispatch = useDispatch()
@@ -69,6 +135,7 @@ export default function ImageExamination() {
   const [imgLoading, setImgLoading] = useState(false)
 
   const imageRef = useRef(null)
+  const viewportRef = useRef(null)
   const isDragging = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
 
@@ -131,11 +198,23 @@ export default function ImageExamination() {
     e.currentTarget.style.cursor = zoom > 1 ? 'grab' : 'default'
   }
 
-  const handleWheel = (e) => {
-    e.preventDefault()
-    if (e.deltaY < 0) handleZoomIn()
-    else handleZoomOut()
-  }
+  // Attach a non-passive wheel listener so preventDefault() actually stops the
+  // page from scrolling. React's synthetic onWheel is registered as passive,
+  // which silently ignores preventDefault(). Zoom is Skin-only.
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      if (sampleType !== 'derm') return // zoom only for Skin
+      e.preventDefault()
+      setZoom((z) => {
+        const next = e.deltaY < 0 ? z + 0.25 : z - 0.25
+        return Math.min(5, Math.max(0.5, next))
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [sampleType])
 
   // Snap current zoomed view and upload to server
   const handleSnapshot = useCallback(async () => {
@@ -156,18 +235,23 @@ export default function ImageExamination() {
       const imgEl = imageRef.current
       const imgRect = imgEl.getBoundingClientRect()
 
-      // Canvas = viewport size at 2x for quality
-      canvas.width = containerRect.width * 2
-      canvas.height = containerRect.height * 2
+      // Capture a centered SQUARE region of the viewport (not the full wide box)
+      const side = Math.min(containerRect.width, containerRect.height)
+      const regionLeft = containerRect.left + (containerRect.width - side) / 2
+      const regionTop = containerRect.top + (containerRect.height - side) / 2
+
+      // Square output canvas at 2x for quality
+      canvas.width = side * 2
+      canvas.height = side * 2
 
       // Calculate visible portion using bitmap natural dimensions
       const scaleX = imageBitmap.width / imgRect.width
       const scaleY = imageBitmap.height / imgRect.height
 
-      const sx = (containerRect.left - imgRect.left) * scaleX
-      const sy = (containerRect.top - imgRect.top) * scaleY
-      const sw = containerRect.width * scaleX
-      const sh = containerRect.height * scaleY
+      const sx = (regionLeft - imgRect.left) * scaleX
+      const sy = (regionTop - imgRect.top) * scaleY
+      const sw = side * scaleX
+      const sh = side * scaleY
 
       ctx.drawImage(
         imageBitmap,
@@ -177,6 +261,12 @@ export default function ImageExamination() {
         0, 0, canvas.width, canvas.height
       )
       imageBitmap.close()
+
+      // 45 mm × 45 mm X–Y axis scale — only for zoomed-in Skin images
+      const isZoomedSkin = sampleType === 'derm' && zoom > 1
+      if (isZoomedSkin) {
+        draw45mmScale(ctx, canvas.width)
+      }
 
       // Convert canvas to blob for upload
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
@@ -190,7 +280,9 @@ export default function ImageExamination() {
         file,
         scope,
         bodyPart: bodyPart || '',
-        notes: `Snapshot at ${Math.round(zoom * 100)}% zoom`,
+        notes: isZoomedSkin
+          ? `Snapshot at ${Math.round(zoom * 100)}% zoom · 45mm×45mm scale`
+          : `Snapshot at ${Math.round(zoom * 100)}% zoom`,
       }).unwrap()
 
       // Store locally for PDF selection
@@ -291,34 +383,37 @@ export default function ImageExamination() {
         </p>
       </div>
 
-      {/* ─── Sample Type Selection ──────────────────────────────────────── */}
-      <section className="medical-card">
-        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-          Sample Type
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          {SAMPLE_TYPES.map(({ id, label, icon: Icon, color }) => (
-            <button
-              key={id}
-              onClick={() => handleSampleTypeChange(id)}
-              className={`flex items-center gap-2.5 px-5 py-3 rounded-xl border-2 font-medium text-sm transition-all duration-200 ${
-                sampleType === id
-                  ? `${COLOR_MAP[color].active} border-transparent`
-                  : `border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 ${COLOR_MAP[color].hover}`
-              }`}
-            >
-              <Icon size={20} />
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* ─── Sample Type + Body Region (one row, separate sections) ─────── */}
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+        {/* Sample Type */}
+        <section className="medical-card flex-1">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+            Sample Type
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            {SAMPLE_TYPES.map(({ id, label, icon: Icon, color }) => (
+              <button
+                key={id}
+                onClick={() => handleSampleTypeChange(id)}
+                className={`flex items-center gap-2.5 px-5 py-3 rounded-xl border-2 font-medium text-sm transition-all duration-200 ${
+                  sampleType === id
+                    ? `${COLOR_MAP[color].active} border-transparent`
+                    : `border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 ${COLOR_MAP[color].hover}`
+                }`}
+              >
+                <Icon size={20} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
 
-        {/* Body Part selector for Skin */}
+        {/* Body Region — only for Skin */}
         {sampleType === 'derm' && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+          <section className="medical-card flex-1">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
               Body Region
-            </h3>
+            </h2>
             <div className="flex flex-wrap gap-2">
               {SKIN_BODY_PARTS.map(({ id, label, icon }) => (
                 <button
@@ -336,7 +431,7 @@ export default function ImageExamination() {
               ))}
             </div>
             {bodyPart && (
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-3 flex items-center gap-2">
                 <span className="text-xs text-gray-500">Selected:</span>
                 <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${COLOR_MAP.amber.badge}`}>
                   {SKIN_BODY_PARTS.find((p) => p.id === bodyPart)?.icon}{' '}
@@ -347,9 +442,9 @@ export default function ImageExamination() {
                 </span>
               </div>
             )}
-          </div>
+          </section>
         )}
-      </section>
+      </div>
 
       {/* ─── Image Viewer + Zoom ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -397,35 +492,40 @@ export default function ImageExamination() {
           <div className="medical-card p-0 overflow-hidden">
             {/* Zoom toolbar */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleZoomOut}
-                  disabled={!viewingImage}
-                  className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
-                  title="Zoom out"
-                >
-                  <ZoomOut size={18} />
-                </button>
-                <div className="px-3 py-1 rounded-md bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm font-mono font-medium text-gray-700 dark:text-gray-200 min-w-[4rem] text-center">
-                  {Math.round(zoom * 100)}%
+              {/* Zoom controls — Skin only */}
+              {sampleType === 'derm' ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleZoomOut}
+                    disabled={!viewingImage}
+                    className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
+                    title="Zoom out"
+                  >
+                    <ZoomOut size={18} />
+                  </button>
+                  <div className="px-3 py-1 rounded-md bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm font-mono font-medium text-gray-700 dark:text-gray-200 min-w-[4rem] text-center">
+                    {Math.round(zoom * 100)}%
+                  </div>
+                  <button
+                    onClick={handleZoomIn}
+                    disabled={!viewingImage}
+                    className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
+                    title="Zoom in"
+                  >
+                    <ZoomIn size={18} />
+                  </button>
+                  <button
+                    onClick={handleResetZoom}
+                    disabled={!viewingImage}
+                    className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
+                    title="Reset zoom"
+                  >
+                    <RotateCcw size={16} />
+                  </button>
                 </div>
-                <button
-                  onClick={handleZoomIn}
-                  disabled={!viewingImage}
-                  className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
-                  title="Zoom in"
-                >
-                  <ZoomIn size={18} />
-                </button>
-                <button
-                  onClick={handleResetZoom}
-                  disabled={!viewingImage}
-                  className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
-                  title="Reset zoom"
-                >
-                  <RotateCcw size={16} />
-                </button>
-              </div>
+              ) : (
+                <div />
+              )}
 
               {/* Snapshot button */}
               <button
@@ -444,12 +544,12 @@ export default function ImageExamination() {
 
             {/* Image viewport */}
             <div
+              ref={viewportRef}
               className="relative w-full h-[450px] bg-gray-900 overflow-hidden select-none"
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              onWheel={handleWheel}
               style={{ cursor: zoom > 1 ? 'grab' : 'default' }}
             >
               {viewingImage ? (
@@ -479,6 +579,16 @@ export default function ImageExamination() {
                       onLoad={() => setImgLoading(false)}
                       onError={() => { setImgLoading(false); setImgError(true) }}
                     />
+                  )}
+                  {/* Square capture guide — shows the region that will be saved */}
+                  {!imgError && (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                      <div className="relative h-full aspect-square ring-1 ring-white/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]">
+                        <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] font-medium text-white/80 bg-black/40 px-1.5 py-0.5 rounded">
+                          Capture area
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </>
               ) : (

@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSidebarOpen } from '../../store/slices/uiSlice'
-import { LayoutDashboard, Eye, Ear, Scan, Microscope, Video, Upload, FileText, Settings, X, Activity, Search } from 'lucide-react'
+import { logout } from '../../store/slices/authSlice'
+import { LayoutDashboard, Eye, Ear, Scan, Microscope, Video, FileText, X, Search, LogOut, User, Trash2 } from 'lucide-react'
 import { SCOPE_LABELS, SCOPE_COLORS } from '../../config/device'
-
-const scopeIcons = { opth: Eye, oto: Ear, derm: Scan, micro: Microscope }
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -16,12 +15,14 @@ const navItems = [
   { type: 'divider', label: 'Tools' },
   { path: '/examination', label: 'Examination', icon: Search },
   { path: '/reports', label: 'Reports', icon: FileText },
+  { path: '/trash', label: 'Trash', icon: Trash2 },
   { path: '/live', label: 'Live Feed', icon: Video },
 ]
 
 export default function Sidebar() {
   const dispatch = useDispatch()
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen)
+  const user = useSelector((state) => state.auth.user)
 
   const closeSidebar = () => dispatch(setSidebarOpen(false))
 
@@ -40,10 +41,7 @@ export default function Sidebar() {
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5 border-b border-gray-200 dark:border-surface-border">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-medical-500 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">iX</span>
-            </div>
-            <span className="font-semibold text-lg">IXOPE</span>
+            <img src="/logo.png" alt="IXOPE" className="h-9" />
           </div>
           <button onClick={closeSidebar} className="md:hidden p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
             <X size={20} />
@@ -74,8 +72,8 @@ export default function Sidebar() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-medical-50 dark:bg-medical-500/10 text-medical-600 dark:text-medical-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                      ? 'bg-medical-500 dark:bg-medical-600 text-white shadow-md shadow-medical-500/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`
                 }
               >
@@ -86,12 +84,31 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-200 dark:border-surface-border">
-          <p className="text-xs text-gray-400 dark:text-gray-600 text-center">IXOPE Medical v1.0</p>
-        </div>
+        {/* User footer */}
+        {user && (
+          <div className="p-4 border-t border-gray-200 dark:border-surface-border">
+            <div className="flex items-center gap-3 mb-3">
+              {user.picture ? (
+                <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-medical-500/20 flex items-center justify-center">
+                  <User size={14} className="text-medical-600 dark:text-medical-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => dispatch(logout())}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+            >
+              <LogOut size={16} /> Sign out
+            </button>
+          </div>
+        )}
       </aside>
     </>
   )
 }
-

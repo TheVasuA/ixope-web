@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Cpu, Plus, Wifi, WifiOff, Copy, Check, Trash2, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Cpu, Plus, Wifi, WifiOff, Copy, Check, RefreshCw } from 'lucide-react'
 import { SERVER_URL } from '../../config/device'
 import toast from 'react-hot-toast'
 
 export default function AdminDevices() {
+  const navigate = useNavigate()
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -110,7 +112,11 @@ export default function AdminDevices() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {devices.map((device) => (
-            <div key={device.device_id || device.id} className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
+            <div
+              key={device.device_id || device.id}
+              onClick={() => navigate(`/admin/devices/${device.device_id}`)}
+              className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-medical-500/40 hover:shadow-lg hover:shadow-medical-500/5 cursor-pointer transition-all"
+            >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-xl ${device.is_online ? 'bg-green-500/10' : 'bg-gray-800'}`}>
@@ -131,7 +137,7 @@ export default function AdminDevices() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Device ID</span>
-                  <button onClick={() => handleCopy(device.device_id)} className="flex items-center gap-1 font-mono text-medical-400 hover:text-medical-300">
+                  <button onClick={(e) => { e.stopPropagation(); handleCopy(device.device_id) }} className="flex items-center gap-1 font-mono text-medical-400 hover:text-medical-300">
                     {device.device_id}
                     {copiedId === device.device_id ? <Check size={12} /> : <Copy size={12} />}
                   </button>

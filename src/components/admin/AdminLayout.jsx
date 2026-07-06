@@ -1,40 +1,53 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { logout } from '../../store/slices/authSlice'
-import { Shield, LayoutDashboard, Cpu, Users, Settings, FileText, LogOut, Activity, Bell } from 'lucide-react'
+import { Shield, LayoutDashboard, Cpu, Users, LogOut, Bell, Menu, X } from 'lucide-react'
 
 const adminNav = [
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { path: '/admin/devices', label: 'Devices', icon: Cpu },
   { path: '/admin/users', label: 'Users', icon: Users },
-  { path: '/admin/reports', label: 'Reports', icon: FileText },
-  { path: '/admin/logs', label: 'Activity Logs', icon: Activity },
-  { path: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
 export default function AdminLayout() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const user = useSelector((state) => state.auth.user)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const handleLogout = () => {
     dispatch(logout())
     navigate('/admin/login')
   }
 
+  const closeSidebar = () => setSidebarOpen(false)
+
   return (
     <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={closeSidebar} />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-900/80 border-r border-gray-800 flex flex-col">
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-900/95 md:bg-gray-900/80 border-r border-gray-800 flex flex-col transition-transform duration-200 md:translate-x-0 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
         {/* Logo */}
-        <div className="h-16 flex items-center gap-3 px-5 border-b border-gray-800">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-medical-500 to-blue-600 flex items-center justify-center">
-            <Shield size={18} className="text-white" />
+        <div className="h-16 flex items-center justify-between px-5 border-b border-gray-800">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-medical-500 to-blue-600 flex items-center justify-center">
+              <Shield size={18} className="text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-sm">IXOPE</span>
+              <span className="text-xs text-gray-500 ml-1.5">Admin</span>
+            </div>
           </div>
-          <div>
-            <span className="font-bold text-sm">IXOPE</span>
-            <span className="text-xs text-gray-500 ml-1.5">Admin</span>
-          </div>
+          <button onClick={closeSidebar} className="md:hidden p-1 rounded hover:bg-gray-800">
+            <X size={20} />
+          </button>
         </div>
 
         {/* Nav */}
@@ -44,6 +57,7 @@ export default function AdminLayout() {
               key={item.path}
               to={item.path}
               end={item.end}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
@@ -81,8 +95,16 @@ export default function AdminLayout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6">
-          <h2 className="text-lg font-semibold">Admin Console</h2>
+        <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-2 rounded-lg hover:bg-gray-800"
+            >
+              <Menu size={20} />
+            </button>
+            <h2 className="text-lg font-semibold">Admin Console</h2>
+          </div>
           <div className="flex items-center gap-3">
             <button className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 relative">
               <Bell size={18} />
@@ -92,7 +114,7 @@ export default function AdminLayout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>

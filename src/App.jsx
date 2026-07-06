@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import AppLayout from './components/layout/AppLayout'
 import AdminLayout from './components/admin/AdminLayout'
@@ -8,7 +8,7 @@ import { Toaster } from 'react-hot-toast'
 
 // ─── MAINTENANCE MODE ────────────────────────────────────────────────────────
 // Set to true to redirect all users to maintenance page
-const MAINTENANCE_MODE = true
+const MAINTENANCE_MODE = false
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Retry wrapper for lazy imports — handles chunk load failures after deploy
@@ -35,6 +35,7 @@ const ScopeGallery = lazyRetry(() => import('./pages/ScopeGallery'))
 const LiveFeed = lazyRetry(() => import('./pages/LiveFeed'))
 const Uploads = lazyRetry(() => import('./pages/Uploads'))
 const Reports = lazyRetry(() => import('./pages/Reports'))
+const Trash = lazyRetry(() => import('./pages/Trash'))
 const DeviceManagement = lazyRetry(() => import('./pages/DeviceManagement'))
 const ImageExamination = lazyRetry(() => import('./pages/ImageExamination'))
 
@@ -42,6 +43,7 @@ const ImageExamination = lazyRetry(() => import('./pages/ImageExamination'))
 const AdminLogin = lazyRetry(() => import('./pages/admin/AdminLogin'))
 const AdminDashboard = lazyRetry(() => import('./pages/admin/AdminDashboard'))
 const AdminDevices = lazyRetry(() => import('./pages/admin/AdminDevices'))
+const AdminDeviceGallery = lazyRetry(() => import('./pages/admin/AdminDeviceGallery'))
 const AdminUsers = lazyRetry(() => import('./pages/admin/AdminUsers'))
 
 function PageLoader() {
@@ -104,6 +106,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
             <Route path="devices" element={<Suspense fallback={<PageLoader />}><AdminDevices /></Suspense>} />
+            <Route path="devices/:deviceId" element={<Suspense fallback={<PageLoader />}><AdminDeviceGallery /></Suspense>} />
             <Route path="users" element={<Suspense fallback={<PageLoader />}><AdminUsers /></Suspense>} />
           </Route>
         )}
@@ -116,6 +119,7 @@ export default function App() {
           <Route path="/live" element={<Suspense fallback={<PageLoader />}><LiveFeed /></Suspense>} />
           <Route path="/uploads" element={<Suspense fallback={<PageLoader />}><Uploads /></Suspense>} />
           <Route path="/reports" element={<Suspense fallback={<PageLoader />}><Reports /></Suspense>} />
+          <Route path="/trash" element={<Suspense fallback={<PageLoader />}><Trash /></Suspense>} />
           <Route path="/examination" element={<Suspense fallback={<PageLoader />}><ImageExamination /></Suspense>} />
           <Route path="/device" element={<Suspense fallback={<PageLoader />}><DeviceManagement /></Suspense>} />
           <Route path="*" element={<NotFound />} />
