@@ -65,7 +65,7 @@ export default function Reports() {
 
   // ─── Generate ────────────────────────────────────────────────────────
 
-  const canGenerate = totalSelected > 0 && patientInfo.name.trim() && patientInfo.id.trim()
+  const canGenerate = totalSelected > 0 && patientInfo.id.trim()
 
   const handleGenerate = async () => {
     dispatch(setGenerating(true))
@@ -101,9 +101,7 @@ export default function Reports() {
       if (selectedImages.length > 0) {
         const dicomFolder = zip.folder('DICOM')
         const params = new URLSearchParams({
-          patient_name: patientInfo.name || 'Anonymous',
           patient_id: patientInfo.id || '',
-          date_of_birth: patientInfo.dateOfBirth || '',
         }).toString()
         for (const img of selectedImages) {
           if (!img.id) continue
@@ -136,9 +134,16 @@ export default function Reports() {
 
       // 5. Generate and download ZIP
       const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const now = new Date()
+      const timestamp = now.getFullYear().toString() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0') + '_' +
+        String(now.getHours()).padStart(2, '0') +
+        String(now.getMinutes()).padStart(2, '0') +
+        String(now.getSeconds()).padStart(2, '0')
       const a = document.createElement('a')
       a.href = URL.createObjectURL(zipBlob)
-      a.download = `ixope-report-${patientInfo.id || 'patient'}.zip`
+      a.download = `ixope-report_${timestamp}.zip`
       a.click()
       toast.success('Report ZIP downloaded')
       setShowModal(false)
@@ -344,17 +349,6 @@ export default function Reports() {
             {/* Form */}
             <div className="px-6 py-5 space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Patient Name *</label>
-                <input
-                  type="text"
-                  value={patientInfo.name}
-                  onChange={(e) => dispatch(setPatientInfo({ name: e.target.value }))}
-                  className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-medical-500 outline-none"
-                  placeholder="Patient name"
-                  autoFocus
-                />
-              </div>
-              <div>
                 <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Patient ID *</label>
                 <input
                   type="text"
@@ -362,15 +356,7 @@ export default function Reports() {
                   onChange={(e) => dispatch(setPatientInfo({ id: e.target.value }))}
                   className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-medical-500 outline-none"
                   placeholder="Patient ID"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Date of Birth</label>
-                <input
-                  type="date"
-                  value={patientInfo.dateOfBirth}
-                  onChange={(e) => dispatch(setPatientInfo({ dateOfBirth: e.target.value }))}
-                  className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  autoFocus
                 />
               </div>
               <div>
@@ -409,7 +395,7 @@ export default function Reports() {
 
             {pdfUrl && (
               <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
-                <a href={pdfUrl} download="ixope-report.pdf" className="flex-1 btn-secondary text-xs text-center flex items-center justify-center gap-1.5">
+                <a href={pdfUrl} download={`ixope-report_${new Date().toISOString().replace(/[:.]/g, '').slice(0, 15)}.pdf`} className="flex-1 btn-secondary text-xs text-center flex items-center justify-center gap-1.5">
                   <Download size={12} /> PDF Only
                 </a>
                 <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="flex-1 btn-secondary text-xs text-center flex items-center justify-center gap-1.5">

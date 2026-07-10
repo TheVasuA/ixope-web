@@ -36,9 +36,7 @@ export async function generateMedicalReport(selectedImages, patientInfo) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       user_id: patientInfo.id || 'default',
-      patient_name: patientInfo.name,
       patient_id: patientInfo.id,
-      date_of_birth: patientInfo.dateOfBirth || '',
       notes: patientInfo.notes || '',
     }),
   })

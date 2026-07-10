@@ -2,7 +2,7 @@ import { createSlice } from '@reduxjs/toolkit'
 
 const initialState = {
   selectedImages: [],
-  patientInfo: { name: '', id: '', dateOfBirth: '', notes: '' },
+  patientInfo: { id: '', notes: '' },
   generating: false,
 }
 
