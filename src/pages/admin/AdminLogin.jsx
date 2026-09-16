@@ -2,10 +2,8 @@ import { useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { setUser } from '../../store/slices/authSlice'
+import { adminLogin } from '../../services/adminApi'
 import { Lock, Mail, Eye, EyeOff, Shield } from 'lucide-react'
-
-const ADMIN_EMAIL = 'admin@ixope-hub.com'
-const ADMIN_PASS = 'ixope@321'
 
 export default function AdminLogin() {
   const dispatch = useDispatch()
@@ -16,26 +14,35 @@ export default function AdminLogin() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    setTimeout(() => {
-      if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
-        dispatch(setUser({
-          name: 'Admin',
-          email: ADMIN_EMAIL,
-          picture: '',
-          role: 'admin',
-          googleId: 'admin-001',
-        }))
-        navigate('/admin')
-      } else {
-        setError('Invalid email or password')
+    try {
+      // Backend accepts username OR email in the "username" field.
+      const data = await adminLogin(email.trim(), password)
+      const user = data.user || {}
+      if (user.role !== 'admin') {
+        setError('This account does not have admin access')
+        setLoading(false)
+        return
       }
+      dispatch(setUser({
+        token: data.access_token,
+        id: user.id,
+        name: user.full_name || user.username || 'Admin',
+        email: user.email,
+        username: user.username,
+        picture: '',
+        role: 'admin',
+      }))
+      navigate('/admin')
+    } catch (err) {
+      setError(err.message || 'Invalid email or password')
+    } finally {
       setLoading(false)
-    }, 600)
+    }
   }
 
   return (
@@ -70,11 +77,11 @@ export default function AdminLogin() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email */}
               <div>
-                <label className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5 block">Email</label>
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5 block">Email or Username</label>
                 <div className="relative">
                   <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="admin@ixope-hub.com"

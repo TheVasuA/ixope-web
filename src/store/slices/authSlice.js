@@ -25,10 +25,13 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setUser(state, action) {
-      state.user = action.payload
+      // Accept either a plain user object or { token, ...user }.
+      const { token, ...user } = action.payload || {}
+      state.user = user
       state.isAuthenticated = true
-      localStorage.setItem('ixope-user', JSON.stringify(action.payload))
+      localStorage.setItem('ixope-user', JSON.stringify(user))
       localStorage.setItem('ixope-login-time', String(Date.now()))
+      if (token) localStorage.setItem('ixope-token', token)
     },
     logout(state) {
       state.user = null
