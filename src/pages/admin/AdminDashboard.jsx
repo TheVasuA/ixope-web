@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react'
 import { Cpu, Image, Video, HardDrive, Activity, TrendingUp, Wifi, WifiOff, Eye, Ear, Scan, Microscope } from 'lucide-react'
 import { SERVER_URL } from '../../config/device'
 
+function authHeaders() {
+  const token = localStorage.getItem('ixope-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
@@ -32,7 +37,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${SERVER_URL}/admin/stats`).then(r => r.json()).catch(() => null),
+      fetch(`${SERVER_URL}/admin/stats`, { headers: authHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(`${SERVER_URL}/devices`).then(r => r.json()).catch(() => []),
     ]).then(([statsData, devicesData]) => {
       setStats(statsData)
@@ -82,11 +87,11 @@ export default function AdminDashboard() {
 
       {/* Scope Breakdown */}
       {stats?.scope_stats && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 md:p-6">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
             <Activity size={18} className="text-medical-400" /> Captures by Scope
           </h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {stats.scope_stats.map((s) => {
               const ScopeIcon = scopeIcons[s.scope]
               return (
@@ -95,7 +100,7 @@ export default function AdminDashboard() {
                     <ScopeIcon size={16} className="text-gray-400" />
                     <span className="text-xs font-medium text-gray-300">{scopeLabels[s.scope]}</span>
                   </div>
-                  <div className="flex items-baseline gap-3">
+                  <div className="flex items-baseline gap-3 flex-wrap">
                     <span className="text-lg font-bold">{s.images}</span>
                     <span className="text-xs text-gray-500">images</span>
                     <span className="text-lg font-bold">{s.videos}</span>
@@ -110,8 +115,8 @@ export default function AdminDashboard() {
 
       {/* Devices Table */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2">
+        <div className="px-4 md:px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+          <h3 className="font-semibold flex items-center gap-2 text-sm md:text-base">
             <Cpu size={18} className="text-medical-400" /> Connected Devices
           </h3>
           <span className="text-xs bg-green-500/10 text-green-400 px-2.5 py-1 rounded-full font-medium">

@@ -20,6 +20,10 @@ export default defineConfig({
         target: 'http://localhost:8001',
         changeOrigin: true,
       },
+      '/admin': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
       '/devices': {
         target: 'http://localhost:8001',
         changeOrigin: true,
